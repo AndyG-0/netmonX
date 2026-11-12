@@ -45,6 +45,7 @@ under the new version when you cut a release.
 - `scripts/backup.sh` / `scripts/restore.sh` for the data volumes (Prometheus, Grafana, Speedtest Tracker sqlite, collector state, NetAlertX).
 - `scripts/setup.sh` setup wizard: writes .env, makes the router key, checks the login and fills in router/mesh IPs.
 - Weekly digest to ntfy (`scripts/digest.py`, `digest` compose profile).
+- `iperf3` profile and `scripts/lan-speed.sh` for LAN speed tests, graphed on the Clients dashboard.
 
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.

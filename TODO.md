@@ -124,8 +124,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
       `nf_conntrack_acct=1`), or Asus Traffic Analyzer's database (when the user has it on). Research first.
 - [ ] **App / category usage** (L) [UniFi DPI, Asus AiProtection]: only if the bwdpi data can be read without
       changes. Research only.
-- [ ] **LAN throughput test** (M) [WiFiman]: optional `iperf3 -s` container. Document running a client from
+- [x] **LAN throughput test** (M) [WiFiman]: optional `iperf3 -s` container. Document running a client from
       phones and laptops, and graph the results (or push them via Pushgateway).
+      Done: Done: `iperf3` compose profile (iperf3 server + Pushgateway, found by Prometheus via DNS SD so there's no down target without the profile) and `scripts/lan-speed.sh <host> [name]` (upload + download, pushes `netmonx_lan_speed_bits{client,direction}`). "LAN speed tests" row on Clients. Tested end to end in podman. Phone apps can't push; their results stay on the phone.
 - [ ] **DNS filtering integration** (S) [Pi-hole, AdGuard]: optional compose profile with an exporter for
       Pi-hole/AdGuard Home if the user runs one: queries, block %, top clients.
 - [x] **Collector self-metrics** (S): per-command SSH duration histogram, reconnect counter, and output parse

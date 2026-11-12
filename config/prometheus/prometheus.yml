@@ -77,6 +77,16 @@ scrape_configs:
     static_configs:
       - targets: ["speedtest-tracker:80"]
 
+  # LAN speed test results from scripts/lan-speed.sh (COMPOSE_PROFILES=iperf3). Found by DNS, so there's
+  # simply no target (not a down one) while the pushgateway isn't running.
+  - job_name: pushgateway
+    honor_labels: true
+    dns_sd_configs:
+      - names: [pushgateway]
+        type: A
+        port: 9091
+        refresh_interval: 5m
+
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]

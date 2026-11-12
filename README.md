@@ -164,6 +164,16 @@ your own server or a long random topic name) and add `digest` to `COMPOSE_PROFIL
 `docker compose up -d`. `DIGEST_SCHEDULE` sets the time (default `mon 08:00`). Device names are left out unless
 `DIGEST_NAMES=true`.
 
+### 8. LAN speed tests (optional)
+
+Add `iperf3` to `COMPOSE_PROFILES` and run `docker compose up -d`: that starts an iperf3 server (port 5201) and a
+Prometheus Pushgateway (port 9091). From a laptop or desktop with `iperf3` installed, run
+`scripts/lan-speed.sh <netmonx-host> "office laptop"`: it tests upload and download for 10 s each, prints them and
+pushes them to the *LAN speed tests* row of the *Clients* dashboard. Phones can use any iperf3 app against the same
+host and port, but those results stay on the phone. Test once on Wi-Fi and once wired, or in different rooms, to
+see whether a slow connection is the Wi-Fi or the ISP. The Pushgateway has no login, so anyone on the LAN can push
+numbers to it.
+
 ### Upgrading
 
 1. Read the [release notes](https://github.com/AndyG-0/netmonX/releases). Config or dashboard changes show up there.
@@ -267,7 +277,8 @@ collector/            asus-collector image (Python 3.12, asyncssh, prometheus-cl
 config/               prometheus, smokeping, blackbox, grafana provisioning + alert rules
 dashboards/           generated Grafana JSON (from scripts/build_dashboards.py)
 scripts/              release.sh, changelog.sh, router-recon.sh, build_dashboards.py, dev-up.sh,
-                      backup.sh / restore.sh, setup.sh, digest.py, update-oui.sh
+                      backup.sh / restore.sh, setup.sh, digest.py, lan-speed.sh,
+                      update-oui.sh
 .github/              CI, publish and release workflows, Dependabot
 dev.sh                local dev runner (collector on host, rest in containers)
 dev/                  fake router + dev overrides

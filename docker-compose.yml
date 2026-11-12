@@ -107,6 +107,22 @@ services:
       - ./dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
 
+  # LAN throughput test server (COMPOSE_PROFILES=iperf3). Run a client from a laptop with scripts/lan-speed.sh
+  # (results are graphed), or from a phone with any iperf3 app (results stay on the phone).
+  iperf3:
+    image: alpine:3.22.8
+    restart: unless-stopped
+    command: ["sh", "-c", "apk add --no-cache iperf3 >/dev/null && exec iperf3 --server --forceflush"]
+    ports: ["${IPERF3_PORT:-5201}:5201/tcp", "${IPERF3_PORT:-5201}:5201/udp"]
+    profiles: ["iperf3"]
+
+  # Receives results from scripts/lan-speed.sh for Prometheus. No login: anyone on the LAN can push to it.
+  pushgateway:
+    image: prom/pushgateway:v1.9.0
+    restart: unless-stopped
+    ports: ["${PUSHGATEWAY_PORT:-9091}:9091"]
+    profiles: ["iperf3"]
+
   # Weekly digest to ntfy (uptime, outages, latency, speed, new devices). Enable with COMPOSE_PROFILES=digest.
   digest:
     image: python:3.12-alpine3.22

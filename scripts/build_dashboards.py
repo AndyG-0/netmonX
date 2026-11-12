@@ -854,6 +854,24 @@ def clients(links, netalertx_url) -> dict:
         overrides=[override("Lost", unit="percentunit")],
         description="Online per the router but losing most pings: often a firewall on the device (Windows "
                     "blocks ping by default), sometimes a bad Wi-Fi link."), 8, 9)
+    L.row("LAN speed tests (iperf3 profile)")
+    L.add(timeseries(
+        "LAN speed by client",
+        [target('max by (client, direction) (netmonx_lan_speed_bits{job="lan_speed"})', "{{client}} {{direction}}")],
+        "bps", min_=0, fill=0, legend_calcs=("lastNotNull", "max"),
+        description="From `scripts/lan-speed.sh <server> [name]` on a laptop or desktop (COMPOSE_PROFILES=iperf3). "
+                    "Each line holds its last result until the next test. Wi-Fi vs. wired, or one room vs. "
+                    "another, tells you whether a slow internet complaint is really the Wi-Fi."), 16, 8)
+    L.add(table(
+        "Last test per client",
+        [target('max by (client, direction) (netmonx_lan_speed_bits{job="lan_speed"})', ref="A", instant=True,
+                table=True),
+         target('max by (client) (netmonx_lan_speed_timestamp_seconds{job="lan_speed"}) * 1000', ref="B",
+                instant=True, table=True)],
+        organize={"excludeByName": {"Time": True},
+                  "renameByName": {"client": "Client", "direction": "Direction", "Value #A": "Speed",
+                                   "Value #B": "When"}},
+        overrides=[override("Speed", unit="bps"), override("When", unit="dateTimeFromNow")]), 8, 8)
     if netalertx_url:
         note = (f"Full device inventory, new-device alerts and presence history are in "
                 f"**[NetAlertX]({netalertx_url})**.")
