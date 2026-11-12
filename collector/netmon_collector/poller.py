@@ -31,6 +31,7 @@ class SharedState:
     isp_hop: str | None = None
     client_ips: dict[str, str] = field(default_factory=dict)  # MAC -> IP of clients in the last poll
     lan_cidr: str = ""  # e.g. 192.168.50.0/24
+    wan_up: bool | None = None  # any WAN up, per the main router's last fast poll (for MQTT)
 
 
 def ssid_keys(snap: parsers.WifiSnapshot, ifaces: dict[str, str]) -> dict[str, str]:
@@ -754,9 +755,11 @@ class NodePoller:
             tasks += [self.conn.run(commands.ping(t, self.ping_count)) for t, _ in targets]
         results = await asyncio.gather(*tasks)
         self._count_unparsed(results[0], FAST_REQUIRED)
-        self.store.set(
-            self.node, "fast", fast_samples(self.node, results[0], self.wan_iface, self.is_primary, self.dual_wan)
-        )
+        fast = fast_samples(self.node, results[0], self.wan_iface, self.is_primary, self.dual_wan)
+        self.store.set(self.node, "fast", fast)
+        if self.is_primary:
+            wan = [s.value for s in fast if s and s.name == "asus_wan_up"]
+            self.shared.wan_up = any(v == 1 for v in wan) if wan else None
 
         ping_out: list[Sample | None] = []
         for (target, role), text in zip(targets, results[1:], strict=False):

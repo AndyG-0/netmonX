@@ -9,7 +9,7 @@ import signal
 
 from prometheus_client.registry import CollectorRegistry
 
-from . import sd
+from . import mqtt, sd
 from .config import Config
 from .metrics import BuildInfoCollector, IspPlanCollector, Store, StoreCollector, collector_version
 from .poller import NodePoller, SharedState
@@ -75,6 +75,17 @@ async def run() -> None:
     tasks = [_poller(cfg, cfg.router_host, store, shared, primary=True).run()]
     if cfg.mesh_ssh and cfg.mesh_nodes:
         tasks.append(_watch_mesh(cfg, store, shared))
+    client = None
+    try:
+        settings = mqtt.MqttSettings.from_url(cfg.mqtt_url, cfg.mqtt_topic, cfg.mqtt_discovery, cfg.mqtt_devices)
+    except ValueError as exc:
+        log.error("MQTT bridge off: %s", exc)
+        settings = None
+    if cfg.mqtt_url and settings:
+        client = mqtt.MqttClient(settings)
+        bridge = mqtt.Bridge(client, lambda: mqtt.snapshot_from(shared, settings.devices))
+        tasks.append(bridge.run(min(cfg.fast_interval, 30)))
+        log.info("MQTT bridge to %s:%s, topic %s/", settings.host, settings.port, settings.prefix)
     # Stop promptly on Ctrl-C, `docker stop` or a dev reload.
     main_task = asyncio.current_task()
     loop = asyncio.get_running_loop()
@@ -84,6 +95,8 @@ async def run() -> None:
         await asyncio.gather(*tasks)
     except asyncio.CancelledError:
         log.info("stopping")
+        if client:
+            await client.close()
 
 
 def main() -> None:

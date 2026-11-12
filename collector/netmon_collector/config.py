@@ -58,6 +58,10 @@ class Config:
     lan_client_ping_max: int = 50
     isp_plan_down: float = 0  # Mbit/s you pay for; 0 = not set
     isp_plan_up: float = 0
+    mqtt_url: str = ""  # empty: no MQTT bridge
+    mqtt_topic: str = "netmonx"
+    mqtt_discovery: bool = True  # Home Assistant discovery configs
+    mqtt_devices: str = "named"  # "named" (devices.yml) or "all"
 
     @classmethod
     def from_env(cls) -> Config:
@@ -112,4 +116,8 @@ class Config:
             lan_client_ping_max=int(_env("LAN_CLIENT_PING_MAX", "50")),
             isp_plan_down=_mbps("ISP_PLAN_DOWN"),
             isp_plan_up=_mbps("ISP_PLAN_UP"),
+            mqtt_url=_env("MQTT_URL"),
+            mqtt_topic=_env("MQTT_TOPIC", "netmonx"),
+            mqtt_discovery=_bool("MQTT_DISCOVERY", True),
+            mqtt_devices=_env("MQTT_DEVICES", "named"),
         )

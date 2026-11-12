@@ -138,7 +138,8 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **Weekly digest** (M) [UniFi/eero weekly report]: a small script or cron container that renders key stats
       (uptime, outages, speed, new devices) and sends them to ntfy or email.
       Done: Done: `scripts/digest.py` (stdlib only) queries Prometheus for the last DIGEST_DAYS (uptime, outages, latency p50/p95, loss, median speed vs plan, bufferbloat grade, devices online/new, reboots, failed router logins) and posts Markdown to ntfy (`NTFY_URL`, optional `NTFY_TOKEN`), or prints. `digest` compose profile runs it on `DIGEST_SCHEDULE` (default mon 08:00). New-device names only with `DIGEST_NAMES=true`. Email not done (ntfy can forward to email).
-- [ ] **Home Assistant / MQTT bridge** (M): publish presence and WAN state over MQTT for automations.
+- [x] **Home Assistant / MQTT bridge** (M): publish presence and WAN state over MQTT for automations.
+      Done: Done: `MQTT_URL` (unset ⇒ off) starts a publish-only MQTT 3.1.1 client in the collector (no new dependency; QoS 0, retained, last will on `netmonx/status`). Publishes WAN state and home/not_home per device (devices.yml only by default, `MQTT_DEVICES=all` for all) on change, everything again after a reconnect, plus Home Assistant discovery configs. Tested against Mosquitto 2.0.22; not tried in a real Home Assistant.
 - [x] **Kiosk / read-only view** (S): Grafana anonymous Viewer role for a wall display, plus a compact
       "status" dashboard.
       Done: *Status* dashboard (`netmonx-status`, big tiles + firing alerts, 1 min refresh) and `GRAFANA_ANONYMOUS` (default false) for anonymous Viewer access.

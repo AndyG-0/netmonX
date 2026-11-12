@@ -35,6 +35,11 @@ services:
       # Plan speed in Mbit/s, for the ISP report card (empty: not shown).
       ISP_PLAN_DOWN: ${ISP_PLAN_DOWN:-}
       ISP_PLAN_UP: ${ISP_PLAN_UP:-}
+      # WAN state and device presence over MQTT, e.g. for Home Assistant (empty: off).
+      MQTT_URL: ${MQTT_URL:-}
+      MQTT_TOPIC: ${MQTT_TOPIC:-netmonx}
+      MQTT_DISCOVERY: ${MQTT_DISCOVERY:-true}
+      MQTT_DEVICES: ${MQTT_DEVICES:-named}
     # Run as the host user that owns secrets/router_key, so the key can stay chmod 600.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:

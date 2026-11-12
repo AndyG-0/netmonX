@@ -174,6 +174,16 @@ host and port, but those results stay on the phone. Test once on Wi-Fi and once 
 see whether a slow connection is the Wi-Fi or the ISP. The Pushgateway has no login, so anyone on the LAN can push
 numbers to it.
 
+### 9. Home Assistant / MQTT (optional)
+
+Set `MQTT_URL` in `.env` (`mqtt://user:password@broker:1883`, or `mqtts://` for TLS) and restart the collector. It
+publishes retained messages under `netmonx/`: `wan` (`online`/`offline`), `device/<mac without colons>`
+(`home`/`not_home`) with a JSON `attributes` topic (name, node, band, last seen), and `status` (the collector's own
+availability, with a last will). With `MQTT_DISCOVERY=true` (the default) Home Assistant picks up an *Internet*
+connectivity sensor and a `device_tracker` per device on its own. By default only devices named in
+`config/collector/devices.yml` are published; `MQTT_DEVICES=all` sends every device seen. The bridge only
+publishes; it never subscribes, so nothing on MQTT can make the collector do anything.
+
 ### Upgrading
 
 1. Read the [release notes](https://github.com/AndyG-0/netmonX/releases). Config or dashboard changes show up there.
