@@ -32,6 +32,7 @@ under the new version when you cut a release.
 - Per-device LAN pings (opt-in `LAN_CLIENT_PING`) through the collector's `/sd/clients` service discovery.
 - Blackbox ICMP job for the router, mesh nodes and ISP gateway, discovered from the collector.
 - Dashboard annotations for WAN outages, reboots and WAN IP changes.
+- Status dashboard for wall displays; optional anonymous viewing with `GRAFANA_ANONYMOUS=true`.
 
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.

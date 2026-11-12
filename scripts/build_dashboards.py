@@ -656,6 +656,35 @@ def clients(links, netalertx_url) -> dict:
     return dashboard("netmonx-clients", "Clients & Wi-Fi", L, links)
 
 
+def status(links) -> dict:
+    """Big tiles for a wall display: open /d/netmonx-status?kiosk (see GRAFANA_ANONYMOUS in .env)."""
+    L = Layout()
+    L.add(stat("Internet", "max(asus_wan_up)", mappings=UP_MAP,
+               steps=thresholds((None, "red"), (1, "green")), color_mode="background"), 6, 6)
+    L.add(stat("Latency", 'avg(asus_ping_rtt_avg_ms{role="internet"})', "ms", decimals=0,
+               steps=thresholds((None, "green"), (40, "yellow"), (100, "red")), color_mode="background",
+               graph=True), 6, 6)
+    L.add(stat("Packet loss (15m)", 'avg(avg_over_time(asus_ping_loss_ratio{role="internet"}[15m]))',
+               "percentunit", decimals=1, steps=thresholds((None, "green"), (0.005, "yellow"), (0.02, "red")),
+               color_mode="background"), 6, 6)
+    L.add(stat("Mesh nodes up", "sum(asus_up)", steps=thresholds((None, "blue")), color_mode="background"), 6, 6)
+    L.add(stat("Devices online", "sum(asus_clients)", steps=thresholds((None, "blue")), graph=True), 6, 5)
+    L.add(stat("Last download", f"max(last_over_time({SPEED('download_bits')}[1d]))", "bps", decimals=0,
+               steps=thresholds((None, "blue"))), 6, 5)
+    L.add(stat("Last upload", f"max(last_over_time({SPEED('upload_bits')}[1d]))", "bps", decimals=0,
+               steps=thresholds((None, "blue"))), 6, 5)
+    L.add(stat("Router temperature", "max(asus_router_temperature_celsius)", "celsius", decimals=0,
+               steps=thresholds((None, "green"), (75, "yellow"), (85, "red"))), 6, 5)
+    L.add({"type": "alertlist", "title": "Firing alerts", "datasource": None,
+           "options": {"viewMode": "list", "groupMode": "default", "maxItems": 10, "sortOrder": 1,
+                       "dashboardAlerts": False, "alertInstanceLabelFilter": "", "showInstances": True,
+                       "stateFilter": {"firing": True, "pending": True, "noData": False, "normal": False,
+                                       "error": True}}}, 12, 8)
+    L.add(timeseries("Internet latency (6h)", [target('avg(asus_ping_rtt_avg_ms{role="internet"})', "latency")],
+                     "ms", min_=0, fill=20, legend_calcs=()), 12, 8)
+    return dashboard("netmonx-status", "Status", L, links, refresh="1m", time_from="now-6h")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", type=Path, default=ROOT / "dashboards", help="output folder (default: dashboards/)")
@@ -673,7 +702,7 @@ def main() -> None:
                       "icon": "external link"})
     out.mkdir(parents=True, exist_ok=True)
     for name, dash in {"overview": overview(links), "isp": isp(links), "router": router(links),
-                       "clients": clients(links, netalertx)}.items():
+                       "clients": clients(links, netalertx), "status": status(links)}.items():
         (out / f"{name}.json").write_text(json.dumps(dash, indent=2) + "\n")
         print(f"wrote {out / name}.json ({len(dash['panels'])} panels)")
 

@@ -128,8 +128,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [ ] **Weekly digest** (M) [UniFi/eero weekly report]: a small script or cron container that renders key stats
       (uptime, outages, speed, new devices) and sends them to ntfy or email.
 - [ ] **Home Assistant / MQTT bridge** (M): publish presence and WAN state over MQTT for automations.
-- [ ] **Kiosk / read-only view** (S): Grafana anonymous Viewer role for a wall display, plus a compact
+- [x] **Kiosk / read-only view** (S): Grafana anonymous Viewer role for a wall display, plus a compact
       "status" dashboard.
+      Done: *Status* dashboard (`netmonx-status`, big tiles + firing alerts, 1 min refresh) and `GRAFANA_ANONYMOUS` (default false) for anonymous Viewer access.
 - [ ] **Backup/restore script** (S): back up the Grafana and Prometheus volumes and speedtest-tracker's sqlite.
 - [ ] **Long-term downsampling** (M): optional VictoriaMetrics in place of Prometheus, for years of data at low
       disk use.
