@@ -92,7 +92,8 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [ ] **ISP report card / SLA** (M) [eero, Ookla, UniFi Internet health]: Prometheus recording rules for
       monthly uptime %, outage count and total minutes, p95 latency, median speed vs. the plan speed
       (`ISP_PLAN_DOWN/UP` in .env). Add a printable "evidence for your ISP" dashboard.
-- [ ] **Outage annotations** (S): Grafana annotations for WAN down/up, node reboots and WAN IP changes.
+- [x] **Outage annotations** (S): Grafana annotations for WAN down/up, node reboots and WAN IP changes.
+      Done: Prometheus annotations on every dashboard: WAN down (red), node reboots (orange, from uptime resets), WAN IP changes (blue). Toggle them at the top of each dashboard.
 - [ ] **Bufferbloat grade** (M) [Waveform, Ookla loaded latency]: compare idle latency with the loaded latency
       that speedtest-tracker reports, and grade A-F. Optionally run a ping series during the speed test.
 - [ ] **Per-hop path monitoring** (M) [PingPlotter, MTR]: run a traceroute every slow interval and keep loss and

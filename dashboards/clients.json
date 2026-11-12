@@ -2158,6 +2158,69 @@
         "hide": true,
         "name": "Annotations & Alerts",
         "type": "dashboard"
+      },
+      {
+        "name": "WAN down",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "red",
+        "expr": "max by (node) (asus_wan_up) == 0",
+        "step": "60s",
+        "titleFormat": "WAN down",
+        "textFormat": "",
+        "tagKeys": "node",
+        "useValueForTime": false,
+        "target": {
+          "expr": "max by (node) (asus_wan_up) == 0",
+          "refId": "Anno",
+          "interval": "60s"
+        }
+      },
+      {
+        "name": "Reboots",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "orange",
+        "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
+        "step": "60s",
+        "titleFormat": "{{node}} rebooted",
+        "textFormat": "",
+        "tagKeys": "node",
+        "useValueForTime": false,
+        "target": {
+          "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
+          "refId": "Anno",
+          "interval": "60s"
+        }
+      },
+      {
+        "name": "WAN IP changes",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "hide": false,
+        "iconColor": "blue",
+        "expr": "increase(asus_wan_ip_changes_total[2m]) > 0",
+        "step": "60s",
+        "titleFormat": "WAN IP changed",
+        "textFormat": "",
+        "tagKeys": "node",
+        "useValueForTime": false,
+        "target": {
+          "expr": "increase(asus_wan_ip_changes_total[2m]) > 0",
+          "refId": "Anno",
+          "interval": "60s"
+        }
       }
     ]
   }

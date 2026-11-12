@@ -186,8 +186,25 @@ def dashboard(uid, title, layout: Layout, links, variables=(), refresh="30s", ti
         "refresh": refresh, "time": {"from": time_from, "to": "now"},
         "templating": {"list": list(variables)}, "links": links, "panels": layout.panels,
         "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"},
-                                  "enable": True, "hide": True, "name": "Annotations & Alerts", "type": "dashboard"}]},
+                                  "enable": True, "hide": True, "name": "Annotations & Alerts", "type": "dashboard"},
+                                 *EVENT_ANNOTATIONS]},
     }
+
+
+def prom_annotation(name, expr, color, title, text=""):
+    """A Prometheus annotation: a marker wherever `expr` returns a series."""
+    return {"name": name, "datasource": DS, "enable": True, "hide": False, "iconColor": color,
+            "expr": expr, "step": "60s", "titleFormat": title, "textFormat": text, "tagKeys": "node",
+            "useValueForTime": False,
+            "target": {"expr": expr, "refId": "Anno", "interval": "60s"}}
+
+
+# Shown on every dashboard, so a dip in a chart can be matched to its cause.
+EVENT_ANNOTATIONS = [
+    prom_annotation("WAN down", "max by (node) (asus_wan_up) == 0", "red", "WAN down"),
+    prom_annotation("Reboots", "resets(asus_router_uptime_seconds[2m]) > 0", "orange", "{{node}} rebooted"),
+    prom_annotation("WAN IP changes", "increase(asus_wan_ip_changes_total[2m]) > 0", "blue", "WAN IP changed"),
+]
 
 
 def query_var(name, label, query, multi=False, include_all=False):
