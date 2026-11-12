@@ -199,6 +199,14 @@ def syslog_tail(lines: int = 500) -> Command:
     return Command("syslog", f"tail -n {lines} {SYSLOG_PATH} 2>/dev/null")
 
 
+def port_status() -> Command:
+    """Ethernet port link state and speed of every AiMesh node, as the main router's web UI shows it.
+
+    A file the firmware keeps up to date; reading it is all we do (never `ethctl`, which can set the link mode).
+    """
+    return Command("ports", "cat /tmp/diag_port_status.json 2>/dev/null")
+
+
 def clients_snapshot() -> Command:
     """AiMesh's own client list (main router only): every device, wired or Wi-Fi, by node and band."""
     return Command("clients_snapshot", "cat /tmp/clientlist.json 2>/dev/null")

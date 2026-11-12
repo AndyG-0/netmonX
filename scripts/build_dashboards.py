@@ -650,6 +650,32 @@ def router(links) -> dict:
     L.row("Topology")
     L.add(topology(), 24, 16)
 
+    L.row("Ethernet ports")
+    speed_colors = thresholds((None, "red"), (100, "orange"), (1000, "green"))
+    L.add(table(
+        "Port link speed",
+        [rinst('max by (node, port) (asus_port_link_speed_mbps{node=~"$node"})', "A"),
+         rinst('max by (node, port) (asus_port_max_speed_mbps{node=~"$node"})', "B")],
+        organize={"excludeByName": {"Time": True},
+                  "renameByName": {"node": "Node", "port": "Port", "Value #A": "Linked at",
+                                   "Value #B": "Port can do"}},
+        overrides=[override("Linked at", unit="Mbits", thresholds=speed_colors,
+                            mappings=[{"type": "value", "options": {"0": {"text": "no link", "color": "text"}}}],
+                            custom_cellOptions={"type": "color-text"}),
+                   override("Port can do", unit="Mbits")],
+        sort=("Node", False),
+        description="Every node's Ethernet ports, from the main router's /tmp/diag_port_status.json (what the web "
+                    "UI shows). W0 is the WAN or wired-backhaul port. 100 or 10 Mbit/s on a gigabit port usually "
+                    "means a bad cable, a 2-pair cable or a slow device on the other end."),
+        10, 10)
+    L.add(timeseries(
+        "Link speed over time",
+        [target('max by (node, port) (asus_port_link_speed_mbps{node=~"$node"}) > 0', "{{node}} {{port}}")],
+        "Mbits", min_=0, fill=0,
+        description="Ports with a link. A step down is a link that renegotiated slower (see the alert "
+                    "\"Ethernet port linked slower than before\")."),
+        14, 10)
+
     L.row("Router events (from the router log)")
     ev = 'sum by (event) (increase(asus_syslog_events_total{{node=~"$node", event=~"{}"}}[$__range]))'
     L.add(bargauge("Events in range", ev.format(".*") + " > 0", "{{event}}",

@@ -116,7 +116,7 @@ Speedtest Tracker serves its Prometheus metrics only after you enable them:
 
 ### 6. Alerts (optional)
 
-Grafana loads 22 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
+Grafana loads 24 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
 
 | Alert | Fires when |
 |---|---|
@@ -142,6 +142,8 @@ Grafana loads 22 alert rules from `config/grafana/provisioning/alerting/rules.ym
 | Known device offline | a device with `alert_offline_hours` in `devices.yml` has been gone that long |
 | Failed logins to the router | more than 2 failed SSH, web UI or VPN logins in the router log within 15 minutes |
 | Router ran out of memory | the router log shows a process killed for lack of memory, or a crash |
+| Uplink port below gigabit | a node's WAN/uplink Ethernet port linked under 1000 Mbit/s for 10 minutes (it can do more) |
+| Ethernet port linked slower than before | a port is slower than its best of the last day, for 15 minutes (cable going bad) |
 
 To get notified:
 

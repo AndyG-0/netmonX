@@ -7,7 +7,7 @@ from prometheus_client import generate_latest
 from prometheus_client.registry import CollectorRegistry
 
 from netmon_collector.metrics import Store, StoreCollector
-from netmon_collector.poller import NodePoller, SharedState
+from netmon_collector.poller import SLOW_GROUPS, NodePoller, SharedState
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -31,6 +31,7 @@ class FakeConn:
             "ping": "ping_busybox.txt",
             "traceroute": "traceroute.txt",
             "syslog": "syslog.txt",
+            "ports": "port_status.json",
         }[command.name]
         return (FIX / name).read_text()
 
@@ -63,7 +64,7 @@ def test_full_cycle_primary():
     poller, store, shared = make(conn)
 
     async def cycle():
-        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config", "syslog"])
+        await poller._guard("slow", poller.poll_slow, SLOW_GROUPS)
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
 
@@ -121,6 +122,12 @@ def test_full_cycle_primary():
     # Presence: every device is online; the first poll is the baseline, so nothing is "new".
     assert text.count("asus_client_online{") == 6 and "asus_client_new{" not in text
     assert 'vendor="Private (random) MAC"' in text  # 5E:... is a locally administered MAC
+    # Ethernet ports: the main router by its own name, mesh nodes by IP; L1 on the main router has no link.
+    assert 'asus_port_link_speed_mbps{node="192.168.50.1",port="W0"} 2500.0' in text
+    assert 'asus_port_up{node="192.168.50.1",port="L1"} 0.0' in text
+    assert 'asus_port_link_speed_mbps{node="192.168.50.2",port="L2"} 10.0' in text
+    assert 'asus_port_max_speed_mbps{node="192.168.50.4",port="W0"} 2500.0' in text
+    assert 'port="U1"' not in text  # USB
 
 
 def test_mesh_node_skips_wan_and_ping():
@@ -141,9 +148,9 @@ def test_mesh_node_skips_wan_and_ping():
 def test_failure_drops_values_and_marks_down():
     conn = FakeConn()
     poller, store, _ = make(conn)
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config", "syslog"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, SLOW_GROUPS))
     conn.fail = True
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config", "syslog"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, SLOW_GROUPS))
     text = render(store)
     assert 'asus_up{node="192.168.50.1"} 0.0' in text
     assert 'asus_poll_errors_total{loop="slow",node="192.168.50.1"} 1.0' in text

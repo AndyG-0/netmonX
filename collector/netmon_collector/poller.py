@@ -435,7 +435,7 @@ def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], na
 
 
 # Store groups the slow loop fills; all are dropped if a slow poll fails.
-SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security", "config", "syslog"]
+SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security", "config", "syslog", "ports"]
 
 # Sections every router returns; if one comes back empty or unparsable, it counts as a parse failure.
 FAST_REQUIRED = {
@@ -574,6 +574,7 @@ class NodePoller:
             security = await self.conn.run(commands.security_snapshot())
             self.store.set(self.node, "security", security_samples(self.node, nv, security, time.time()))
             self.store.set(self.node, "config", self._config(await self.conn.run(commands.config_hash())))
+            self.store.set(self.node, "ports", self._ports(nv, await self.conn.run(commands.port_status())))
         self.store.set(self.node, "syslog", self._syslog(await self.conn.run(commands.syslog_tail())))
         if self.wifi_bands or self.wifi_vifs:
             wifi = await self.conn.run(commands.wifi_snapshot(list(self.wifi_bands), list(self.wifi_vifs)))
@@ -595,6 +596,23 @@ class NodePoller:
         out = [sample("asus_syslog_events", n, node=self.node, event=e) for e, n in self._syslog_counts.items()]
         out.append(sample("asus_syslog_lines", self._syslog_lines, node=self.node))
         out.append(sample("asus_syslog_gaps", self._syslog_gaps, node=self.node))
+        return out
+
+    def _ports(self, nv: dict[str, str], text: str) -> list[Sample | None]:
+        """Link state and speed of every node's Ethernet ports (from the main router's diag file)."""
+        ports = parsers.parse_port_status(text)
+        if ports is None:
+            self.metrics.parse_failures.labels(self.node, "ports").inc()
+            return []
+        nodes, _ = node_labels(self.node, nv.get("lan_hwaddr", "").upper(), self.shared.mesh_nodes, {})
+        out: list[Sample | None] = []
+        for p in ports:
+            lab = {"node": nodes.get(p.node_mac, p.node_mac), "port": p.port}
+            out += [
+                sample("asus_port_up", 1 if p.up else 0, **lab),
+                sample("asus_port_link_speed_mbps", p.link_mbps if p.up else 0, **lab),
+                sample("asus_port_max_speed_mbps", p.max_mbps, **lab),
+            ]
         return out
 
     def _config(self, text: str) -> list[Sample | None]:

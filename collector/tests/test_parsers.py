@@ -262,3 +262,13 @@ def test_syslog_events():
     assert parsers.new_syslog_lines("a\nb\nc", "b") == (["c"], "c", False)
     assert parsers.new_syslog_lines("x\ny", "b") == (["x", "y"], "y", True)
     assert parsers.new_syslog_lines("", "b") == ([], "b", False)
+
+
+def test_parse_port_status():
+    ports = parsers.parse_port_status((FIX / "port_status.json").read_text())
+    assert len(ports) == 16  # 4 nodes x (W0, L1-L3); USB left out
+    w0 = ports[-1]
+    assert (w0.node_mac, w0.port, w0.up, w0.link_mbps, w0.max_mbps) == ("04:D9:F5:AA:BB:04", "W0", True, 1000, 2500)
+    assert parsers.parse_port_status("") == []
+    assert parsers.parse_port_status("not json") is None
+    assert parsers.parse_port_status('{"node_info": {}}') is None

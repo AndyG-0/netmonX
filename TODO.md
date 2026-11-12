@@ -61,9 +61,10 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **Firmware update available** (S) [UniFi, eero]: read `nvram get webs_state_update webs_state_info`.
       Gauge plus alert.
       Done: `asus_firmware_update_available{latest}` from `webs_state_flag`/`webs_state_info` (verified on the XT8: flag 0 and the running version), "Update" column on the Nodes table, info alert.
-- [ ] **LAN/WAN port link speed & duplex** (M) [UniFi port view]: read-only `ethctl <if> media-type` /
+- [x] **LAN/WAN port link speed & duplex** (M) [UniFi port view]: read-only `ethctl <if> media-type` /
       `robocfg show` (depends on the model; check with recon first). Alert when a wired backhaul or a
       known PC negotiates at 100 Mb.
+      Done: `asus_port_up`, `asus_port_link_speed_mbps` and `asus_port_max_speed_mbps` per node and port, read from the main router's `/tmp/diag_port_status.json` (what the web UI shows; covers every AiMesh node). Not `ethctl`: with an argument, `media-type` sets the link mode. No duplex in that file. Ethernet ports row on Router & Mesh, alerts for an uplink below gigabit and a port slower than its best of the last day.
 - [x] **Dual-WAN / failover** (S): also read `wan1_*` nvram keys and add a `wan` label.
       Done: `wan` label on `asus_wan_up`/`asus_wan_link_up`/`asus_wan_info` (wan1 only when `wans_dualwan` has a second WAN), `asus_dualwan_info{wans,mode}`; WAN-down alert now means every WAN, plus a failover alert. Not tested on real dual-WAN hardware.
 - [x] **IPv6** (M): `ipv6_service`, `ipv6_rtr_addr`, `ipv6_prefix` nvram; `ping6` targets from the router.

@@ -20,5 +20,10 @@ cat > /tmp/syslog.log <<'LOG'
 Nov 11 22:40:12 wlceventd: wlceventd_proc_event(722): eth6: Assoc 7C:D9:5C:11:22:33, status: Successful (0), rssi:-49
 Nov 11 22:41:30 roamast: Roam a client [D0:50:99:00:00:09], status [0]
 LOG
+# Ethernet ports (the web UI's diag file): main router WAN at 2.5G, the node's uplink at 1G, one LAN port at 100M.
+cat > /tmp/diag_port_status.json <<'JSON'
+{"port_info":{"02:00:00:AA:BB:01":{"W0":{"is_on":"1","max_rate":"2500","link_rate":"2500"},"L1":{"is_on":"1","max_rate":"1000","link_rate":"1000"},"L2":{"is_on":"0","max_rate":"1000","link_rate":"0"}},
+ "02:00:00:AA:BB:02":{"W0":{"is_on":"1","max_rate":"2500","link_rate":"1000"},"L1":{"is_on":"1","max_rate":"1000","link_rate":"100"}}}}
+JSON
 # -s: no password logins, -R: create host keys, -F/-E: foreground, log to stderr
 exec dropbear -F -E -R -s -p 22

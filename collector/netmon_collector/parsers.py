@@ -745,6 +745,47 @@ def parse_config_hash(text: str) -> tuple[str, int | None] | None:
     return m.group(1), int(count.group(1)) if count else None
 
 
+# --- Ethernet ports ----------------------------------------------------------
+
+
+@dataclass
+class Port:
+    node_mac: str  # upper case
+    port: str  # W0 (WAN), L1..Ln (LAN); USB ports are left out
+    up: bool
+    link_mbps: int
+    max_mbps: int
+
+
+def parse_port_status(text: str) -> list[Port] | None:
+    """/tmp/diag_port_status.json: port_info -> node MAC -> port -> {is_on, link_rate, max_rate}.
+
+    None when the text isn't that JSON (empty is fine: older firmware has no such file).
+    """
+    if not text.strip():
+        return []
+    try:
+        data = json.loads(text)
+        info = data["port_info"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(info, dict):
+        return None
+    out: list[Port] = []
+    for node_mac, ports in info.items():
+        if not isinstance(ports, dict) or not _MAC_RE.match(node_mac):
+            continue
+        for name, p in sorted(ports.items()):
+            if not isinstance(p, dict) or not re.fullmatch(r"[WL]\d+", name):
+                continue
+            try:
+                link, top = int(p.get("link_rate") or 0), int(p.get("max_rate") or 0)
+            except ValueError:
+                continue
+            out.append(Port(node_mac.upper(), name, str(p.get("is_on")) == "1" and link > 0, link, top))
+    return out
+
+
 # --- syslog ----------------------------------------------------------------
 
 # Events counted from /tmp/syslog.log. Patterns come from stock Asus firmware logs

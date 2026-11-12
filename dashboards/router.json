@@ -1871,12 +1871,228 @@
     },
     {
       "type": "row",
-      "title": "Router events (from the router log)",
+      "title": "Ethernet ports",
       "id": 26,
       "collapsed": false,
       "gridPos": {
         "x": 0,
         "y": 104,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Port link speed",
+      "description": "Every node's Ethernet ports, from the main router's /tmp/diag_port_status.json (what the web UI shows). W0 is the WAN or wired-backhaul port. 100 or 10 Mbit/s on a gigabit port usually means a bad cable, a 2-pair cable or a slow device on the other end.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (node, port) (asus_port_link_speed_mbps{node=~\"$node\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (node, port) (asus_port_max_speed_mbps{node=~\"$node\"})",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "node": "Node",
+              "port": "Port",
+              "Value #A": "Linked at",
+              "Value #B": "Port can do"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Linked at"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Mbits"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 100,
+                      "color": "orange"
+                    },
+                    {
+                      "value": 1000,
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "no link",
+                        "color": "text"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Port can do"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Mbits"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "sortBy": [
+          {
+            "displayName": "Node",
+            "desc": false
+          }
+        ]
+      },
+      "id": 27,
+      "gridPos": {
+        "x": 0,
+        "y": 105,
+        "w": 10,
+        "h": 10
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Link speed over time",
+      "description": "Ports with a link. A step down is a link that renegotiated slower (see the alert \"Ethernet port linked slower than before\").",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (node, port) (asus_port_link_speed_mbps{node=~\"$node\"}) > 0",
+          "legendFormat": "{{node}} {{port}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbits",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 28,
+      "gridPos": {
+        "x": 10,
+        "y": 105,
+        "w": 14,
+        "h": 10
+      }
+    },
+    {
+      "type": "row",
+      "title": "Router events (from the router log)",
+      "id": 29,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 115,
         "w": 24,
         "h": 1
       },
@@ -1938,10 +2154,10 @@
           "values": false
         }
       },
-      "id": 27,
+      "id": 30,
       "gridPos": {
         "x": 0,
-        "y": 105,
+        "y": 116,
         "w": 8,
         "h": 10
       }
@@ -1995,10 +2211,10 @@
           "sort": "desc"
         }
       },
-      "id": 28,
+      "id": 31,
       "gridPos": {
         "x": 8,
-        "y": 105,
+        "y": 116,
         "w": 8,
         "h": 10
       }
@@ -2052,10 +2268,10 @@
           "sort": "desc"
         }
       },
-      "id": 29,
+      "id": 32,
       "gridPos": {
         "x": 16,
-        "y": 105,
+        "y": 116,
         "w": 8,
         "h": 10
       }
@@ -2063,11 +2279,11 @@
     {
       "type": "row",
       "title": "Collector",
-      "id": 30,
+      "id": 33,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 115,
+        "y": 126,
         "w": 24,
         "h": 1
       },
@@ -2122,10 +2338,10 @@
           "sort": "desc"
         }
       },
-      "id": 31,
+      "id": 34,
       "gridPos": {
         "x": 0,
-        "y": 116,
+        "y": 127,
         "w": 12,
         "h": 8
       }
@@ -2197,10 +2413,10 @@
           "sort": "desc"
         }
       },
-      "id": 32,
+      "id": 35,
       "gridPos": {
         "x": 12,
-        "y": 116,
+        "y": 127,
         "w": 12,
         "h": 8
       }

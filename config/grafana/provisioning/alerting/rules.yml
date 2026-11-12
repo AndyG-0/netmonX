@@ -577,3 +577,55 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $$labels.node }}: the router log shows a process killed for lack of memory or a crash. Frequent ones mean the router needs a reboot or a firmware update."
+      - uid: uplink-slow
+        title: Uplink port below gigabit
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'asus_port_link_speed_mbps{port=~"W.*"} > 0 < 1000 and on (node, port) asus_port_max_speed_mbps >= 1000'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.node }}: the WAN/uplink port {{ $$labels.port }} linked at {{ $$value }} Mbit/s although it can do 1000 or more. Usually a bad or old (Cat5, 2-pair) cable or a port on the other end that is set to 100 Mbit/s."
+      - uid: port-speed-dropped
+        title: Ethernet port linked slower than before
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'asus_port_link_speed_mbps > 0 < on (node, port) max_over_time(asus_port_link_speed_mbps[1d])'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.node }}: port {{ $$labels.port }} is at {{ $$value }} Mbit/s, slower than earlier today. A cable that renegotiated down often goes bad soon; reseat or replace it."
