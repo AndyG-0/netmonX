@@ -207,12 +207,15 @@ EVENT_ANNOTATIONS = [
 ]
 
 
-def query_var(name, label, query, multi=False, include_all=False):
-    return {
+def query_var(name, label, query, multi=False, include_all=False, regex=""):
+    v = {
         "name": name, "label": label, "type": "query", "datasource": DS,
         "query": {"query": query, "refId": "v"}, "definition": query, "refresh": 2,
         "multi": multi, "includeAll": include_all, "sort": 1, "current": {},
     }
+    if regex:
+        v["regex"] = regex
+    return v
 
 
 UP_MAP = [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]
@@ -573,8 +576,8 @@ def clients(links, netalertx_url) -> dict:
          inst("asus_client_rssi_dbm * on (mac) group_left (ip, vendor, owner, type) asus_client_info", "B")],
         organize={"excludeByName": {**hide, "node": True, "Value #A": True},
                   "renameByName": {**names, "Value #B": "Signal"}, "indexByName": order},
-        overrides=[signal], sort=("Mesh node", False),
-        description="One row per device. Filter a column with the funnel icon in its header. " + wired_or_wifi),
+        overrides=[signal, override("MAC", links=DEVICE_LINK)], sort=("Mesh node", False),
+        description="One row per device. Click a MAC for its details page. Filter a column with the funnel icon in its header. " + wired_or_wifi),
         24, 14)
     L.add(table(
         "Wired devices", [inst('asus_client_info{connection="wired"}', "A")],
@@ -615,7 +618,7 @@ def clients(links, netalertx_url) -> dict:
         organize={"excludeByName": hide,
                   "renameByName": {**names, "Value #A": "Online", "Value #B": "Last seen", "Value #C": "First seen"}},
         overrides=[override("Online", mappings=UP_MAP, custom_cellOptions={"type": "color-text"}),
-                   when("Last seen"), when("First seen")],
+                   when("Last seen"), when("First seen"), override("MAC", links=DEVICE_LINK)],
         sort=("Last seen", True),
         description="Every device seen in the retention window, online or not."), 12, 10)
     L.add(state_timeline("Online timeline",
@@ -705,6 +708,91 @@ def clients(links, netalertx_url) -> dict:
                "Asus app to make this page easier to read."), 24, 3)
     return dashboard("netmonx-clients", "Clients & Wi-Fi", L, links)
 
+DEVICE_LINK = [{"title": "Device details", "url": "/d/netmonx-device?var-mac=${__value.raw}&${__url_time_range}"}]
+
+
+def device(links) -> dict:
+    """Everything about one device, picked by MAC (linked from the MAC columns on Clients & Wi-Fi)."""
+    L = Layout()
+    m = 'mac="$mac"'
+    when = lambda name: override(name, unit="dateTimeFromNow")  # noqa: E731
+    L.add(stat("Online", f"max(asus_client_online{{{m}}})", mappings=UP_MAP, color_mode="background",
+               steps=thresholds((None, "red"), (1, "green"))), 4, 4)
+    L.add(stat("Signal", f"max(asus_client_rssi_dbm{{{m}}})", "dBm",
+               steps=thresholds((None, "red"), (-75, "orange"), (-67, "yellow"), (-55, "green")),
+               description="As seen by the mesh node it is attached to. Empty for wired devices."), 4, 4)
+    L.add(stat("Wi-Fi score", f"max(asus_wifi_client_score{{{m}}})", steps=SCORE_STEPS, decimals=0,
+               description=SCORE_HELP), 4, 4)
+    L.add(stat("Last seen", f"1000 * max(asus_client_last_seen_timestamp_seconds{{{m}}})", "dateTimeFromNow"), 4, 4)
+    L.add(stat("First seen", f"1000 * max(asus_client_first_seen_timestamp_seconds{{{m}}})", "dateTimeFromNow",
+               description="First sighting within the retention window (CLIENT_RETENTION_DAYS)."), 4, 4)
+    L.add(stat("Roams (range)", f"sum(increase(asus_client_roams_total{{{m}}}[$__range])) or vector(0)", decimals=0,
+               description="Moves to another node or band while connected, in the selected time range."), 4, 4)
+
+    inst = lambda expr, ref: target(expr, ref=ref, instant=True, table=True)  # noqa: E731
+    hide = {"Time": True, "__name__": True, "job": True, "instance": True, "Value": True}
+    L.add(table(
+        "Device", [inst(f"asus_client_info{{{m}}}", "A")],
+        organize={"excludeByName": {**hide, "node": True},
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "ip": "IP", "node_name": "Mesh node",
+                                   "connection": "Connection", "band": "Band", "ssid": "SSID",
+                                   "vendor": "Vendor", "owner": "Owner", "type": "Type"}},
+        description="Current entry in the AiMesh client list. Empty while the device is offline."), 16, 4)
+    L.add(table(
+        "DHCP lease", [inst(f"asus_dhcp_lease_info{{{m}}}", "A")],
+        organize={"excludeByName": {**hide, "node": True, "mac": True},
+                  "renameByName": {"hostname": "Lease name", "ip": "IP"}},
+        description="Static (manually assigned) addresses have no lease."), 8, 4)
+
+    L.row("Link")
+    L.add(timeseries(
+        "Signal",
+        [target(f"asus_client_rssi_dbm{{{m}}}", "client list ({{node_name}})"),
+         target(f"asus_wifi_client_rssi_dbm{{{m}}}", "radio {{node}} {{radio}}", "B"),
+         target(f"asus_wifi_client_snr_db{{{m}}}", "SNR {{node}} {{radio}}", "C")],
+        "dBm", fill=0, legend_calcs=("lastNotNull", "min", "mean")), 12, 9)
+    L.add(timeseries(
+        "Link rate",
+        [target(f"asus_wifi_client_tx_rate_mbps{{{m}}}", "to device {{radio}}"),
+         target(f"asus_wifi_client_rx_rate_mbps{{{m}}}", "from device {{radio}}", "B")],
+        "Mbits", min_=0, fill=0, legend_calcs=("lastNotNull", "min", "mean")), 12, 9)
+    L.add(timeseries(
+        "Traffic",
+        [target(f"sum(rate(asus_wifi_client_transmit_bytes_total{{{m}}}[$__rate_interval])) * 8", "download"),
+         target(f"sum(rate(asus_wifi_client_receive_bytes_total{{{m}}}[$__rate_interval])) * 8", "upload", "B")],
+        "bps", min_=0, legend_calcs=("mean", "max"),
+        description="Wi-Fi only: the router doesn't count traffic per wired device."), 12, 9)
+    L.add(timeseries(
+        "Wi-Fi score and retries",
+        [target(f"max(asus_wifi_client_score{{{m}}})", "score"),
+         target(f"100 * sum(rate(asus_wifi_client_tx_retries_total{{{m}}}[$__rate_interval])) / "
+                f"(sum(rate(asus_wifi_client_tx_packets_total{{{m}}}[$__rate_interval])) + "
+                f"sum(rate(asus_wifi_client_tx_retries_total{{{m}}}[$__rate_interval])) > 0)", "retries %", "B")],
+        "none", min_=0, fill=0, legend_calcs=("mean", "min", "lastNotNull"), description=SCORE_HELP), 12, 9)
+
+    L.row("Where and when")
+    L.add(state_timeline("Online", [target(f"max(asus_client_online{{{m}}})", "online")]), 24, 4)
+    L.add(state_timeline(
+        "Attached to", [target(f"max by (node_name, band) (asus_client_info{{{m}}})", "{{node_name}} {{band}}")],
+        description="One row per mesh node and band the device used in the time range. Gaps are offline time, "
+                    "a jump to another row is a roam or reconnect."), 24, 6)
+    L.add(table(
+        "Latest roam", [inst(f"1000 * asus_client_last_roam_timestamp_seconds{{{m}}}", "A")],
+        organize={"excludeByName": {**hide, "Value": False, "mac": True, "hostname": True},
+                  "renameByName": {"from_node": "From node", "to_node": "To node", "from_band": "From band",
+                                   "to_band": "To band", "Value": "When"}},
+        overrides=[when("When")]), 12, 4)
+    L.add(timeseries(
+        "Ping from the server",
+        [target(f'probe_icmp_duration_seconds{{job="lan_clients", phase="rtt", {m}}} * 1000', "rtt")],
+        "ms", min_=0, fill=0, legend_calcs=("mean", "max"),
+        description="Empty unless `LAN_CLIENT_PING=true` in .env (main-LAN devices only)."), 12, 8)
+    named = 'max by (hostname, mac) (asus_client_online{hostname!=""})'
+    unnamed = 'label_replace(max by (hostname, mac) (asus_client_online{hostname=""}), "hostname", "$1", "mac", "(.*)")'
+    mac = query_var("mac", "Device", f"query_result({named} or {unnamed})",
+                    regex='/hostname="(?<text>[^"]*)",\\s*mac="(?<value>[^"]*)"/')
+    return dashboard("netmonx-device", "Device", L, links, [mac], time_from="now-7d")
+
 
 def status(links) -> dict:
     """Big tiles for a wall display: open /d/netmonx-status?kiosk (see GRAFANA_ANONYMOUS in .env)."""
@@ -752,7 +840,8 @@ def main() -> None:
                       "icon": "external link"})
     out.mkdir(parents=True, exist_ok=True)
     for name, dash in {"overview": overview(links), "isp": isp(links), "router": router(links),
-                       "clients": clients(links, netalertx), "status": status(links)}.items():
+                       "clients": clients(links, netalertx), "status": status(links),
+                       "device": device(links)}.items():
         (out / f"{name}.json").write_text(json.dumps(dash, indent=2) + "\n")
         print(f"wrote {out / name}.json ({len(dash['panels'])} panels)")
 

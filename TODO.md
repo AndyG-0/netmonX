@@ -25,8 +25,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
       `config/devices.yml` mapping MAC → name, owner, type (phone, IoT, PC). Exported as labels so panels can be
       filtered by owner or device type.
       Done: `config/collector/devices.yml` (`DEVICES_FILE`), reloaded on change; adds `owner`/`type` labels and `asus_device_offline_alert_hours`.
-- [ ] **Per-device drill-down dashboard** (M) [UniFi client page]: one `$mac` variable. Show signal, link rate,
+- [x] **Per-device drill-down dashboard** (M) [UniFi client page]: one `$mac` variable. Show signal, link rate,
       node/roam history, traffic, online timeline, DHCP lease and vendor.
+      Done: Done: *Device* dashboard (`netmonx-device`, `$mac` picker by name), linked from the MAC columns on Clients. Shows signal/SNR, link rate, Wi-Fi traffic, score and retries, online and attached-node timelines, latest roam, DHCP lease, vendor/owner, ping. Wired traffic per device isn't available (see below).
 - [x] **Wi-Fi experience score** (M) [UniFi "Wi-Fi Experience", Meraki]: a 0-100 score per client from RSSI,
       tx/rx rate vs. the band's max, and retries (from `wl sta_info`). Show the per-node and network
       averages on Overview.

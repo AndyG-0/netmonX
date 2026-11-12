@@ -704,7 +704,7 @@
     {
       "type": "table",
       "title": "All devices",
-      "description": "One row per device. Filter a column with the funnel icon in its header. Counts come from the main router's AiMesh client list, so every node is included.",
+      "description": "One row per device. Click a MAC for its details page. Filter a column with the funnel icon in its header. Counts come from the main router's AiMesh client list, so every node is included.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -833,6 +833,23 @@
                 "value": {
                   "mode": "thresholds"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MAC"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Device details",
+                    "url": "/d/netmonx-device?var-mac=${__value.raw}&${__url_time_range}"
+                  }
+                ]
               }
             ]
           }
@@ -1479,6 +1496,23 @@
               {
                 "id": "unit",
                 "value": "dateTimeFromNow"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "MAC"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Device details",
+                    "url": "/d/netmonx-device?var-mac=${__value.raw}&${__url_time_range}"
+                  }
+                ]
               }
             ]
           }
