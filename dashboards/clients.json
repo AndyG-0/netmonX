@@ -1982,16 +1982,165 @@
       }
     },
     {
+      "type": "row",
+      "title": "Device ping (LAN_CLIENT_PING)",
+      "id": 28,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 97,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Ping to each device",
+      "description": "Empty unless `LAN_CLIENT_PING=true` in .env. One ping a minute from the server to each online device on the main LAN. Phones in power-save mode answer late or not at all.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "probe_icmp_duration_seconds{job=\"lan_clients\", phase=\"rtt\"} * 1000",
+          "legendFormat": "{{hostname}} {{mac}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 29,
+      "gridPos": {
+        "x": 0,
+        "y": 98,
+        "w": 16,
+        "h": 9
+      }
+    },
+    {
+      "type": "table",
+      "title": "Not answering (last 15 min)",
+      "description": "Online per the router but losing most pings: often a firewall on the device (Windows blocks ping by default), sometimes a bad Wi-Fi link.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "1 - avg_over_time(probe_success{job=\"lan_clients\"}[15m]) > 0.5",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true
+            },
+            "renameByName": {
+              "instance": "IP",
+              "hostname": "Device",
+              "mac": "MAC",
+              "Value": "Lost"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lost"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 30,
+      "gridPos": {
+        "x": 16,
+        "y": 98,
+        "w": 8,
+        "h": 9
+      }
+    },
+    {
       "type": "text",
       "title": "Device discovery",
       "options": {
         "mode": "markdown",
         "content": "Full device inventory, new-device alerts and presence history are in **[NetAlertX](http://192.168.50.10:20211)**.\n\nNames come from the Asus app and DHCP. Name devices in the Asus app to make this page easier to read."
       },
-      "id": 28,
+      "id": 31,
       "gridPos": {
         "x": 0,
-        "y": 97,
+        "y": 107,
         "w": 24,
         "h": 3
       }

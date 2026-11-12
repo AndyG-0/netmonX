@@ -29,6 +29,9 @@ services:
       # Optional files in config/collector/ (see devices.yml.example and scripts/update-oui.sh).
       DEVICES_FILE: /etc/netmonx/devices.yml
       OUI_FILE: /etc/netmonx/manuf
+      # Ping every online LAN client from Prometheus (blackbox ICMP, once a minute). Off by default.
+      LAN_CLIENT_PING: ${LAN_CLIENT_PING:-false}
+      LAN_CLIENT_PING_MAX: ${LAN_CLIENT_PING_MAX:-50}
     # Run as the host user that owns secrets/router_key, so the key can stay chmod 600.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:

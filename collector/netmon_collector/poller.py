@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import time
 from dataclasses import dataclass, field
@@ -26,6 +27,10 @@ class SharedState:
     tracker: presence.ClientTracker = field(default_factory=presence.ClientTracker)
     devices: presence.DevicesFile = field(default_factory=lambda: presence.DevicesFile(None))
     oui: presence.OuiTable = field(default_factory=presence.OuiTable)
+    # For /sd/* service discovery (read from the HTTP thread; only ever replaced, never mutated).
+    isp_hop: str | None = None
+    client_ips: dict[str, str] = field(default_factory=dict)  # MAC -> IP of clients in the last poll
+    lan_cidr: str = ""  # e.g. 192.168.50.0/24
 
 
 def ssid_keys(snap: parsers.WifiSnapshot, ifaces: dict[str, str]) -> dict[str, str]:
@@ -191,6 +196,13 @@ def security_samples(node: str, nv: dict[str, str], text: str, now: float) -> li
                 sample("asus_vpn_client_transmit_bytes", p.tx_bytes, **lab),
             ]
     return out
+
+
+def lan_cidr(ip: str, netmask: str) -> str:
+    try:
+        return str(ipaddress.ip_network(f"{ip}/{netmask or '255.255.255.0'}", strict=False))
+    except ValueError:
+        return ""
 
 
 def snr(rssi: float | None, noise: float | None) -> float | None:
@@ -531,6 +543,8 @@ class NodePoller:
         if raw_text.strip() and not raw:
             self.metrics.parse_failures.labels(self.node, "clientlist").inc()
         clients = parsers.dedupe_clients(raw, primary_mac, set(nodes))
+        self.shared.client_ips = {c.mac: c.ip for c in clients if c.ip}
+        self.shared.lan_cidr = lan_cidr(nv.get("lan_ipaddr", ""), nv.get("lan_netmask", ""))
         ssids = {k[: -len("_ssid")]: v for k, v in nv.items() if k.endswith("_ssid") and k.startswith("wl")}
         names = self.shared.hostnames
         self.store.set(
@@ -629,6 +643,7 @@ class NodePoller:
                 )
         if self.isp_hop_setting == "auto":
             self.isp_hop = parsers.pick_isp_hop(nv.get("wan0_gateway"), hops)
+        self.shared.isp_hop = self.isp_hop
         if self.isp_hop:
             out.append(sample("asus_isp_hop_info", 1, node=self.node, ip=self.isp_hop))
         return out

@@ -7,9 +7,9 @@ import logging
 import os
 import signal
 
-from prometheus_client import start_http_server
 from prometheus_client.registry import CollectorRegistry
 
+from . import sd
 from .config import Config
 from .metrics import BuildInfoCollector, Store, StoreCollector, collector_version
 from .poller import NodePoller, SharedState
@@ -59,14 +59,18 @@ async def run() -> None:
     registry.register(StoreCollector(store))
     registry.register(BuildInfoCollector())
     SELF.register(registry)
-    start_http_server(cfg.listen_port, addr=cfg.listen_addr, registry=registry)
-    log.info("collector %s serving metrics on %s:%s/metrics", collector_version(), cfg.listen_addr, cfg.listen_port)
-
     shared = SharedState(
         tracker=ClientTracker(cfg.state_dir, cfg.client_retention_days),
         devices=DevicesFile(cfg.devices_file),
         oui=OuiTable(cfg.oui_file),
     )
+    routes = {
+        "/sd/nodes": lambda: sd.sd_nodes(shared, cfg.router_host),
+        "/sd/dns": lambda: sd.sd_dns(cfg.router_host),
+        "/sd/clients": lambda: sd.sd_clients(shared, cfg.lan_client_ping, cfg.lan_client_ping_max),
+    }
+    sd.serve(sd.make_app(registry, routes), cfg.listen_addr, cfg.listen_port)
+    log.info("collector %s serving metrics on %s:%s/metrics", collector_version(), cfg.listen_addr, cfg.listen_port)
     tasks = [_poller(cfg, cfg.router_host, store, shared, primary=True).run()]
     if cfg.mesh_ssh and cfg.mesh_nodes:
         tasks.append(_watch_mesh(cfg, store, shared))

@@ -378,6 +378,17 @@ def router(links) -> dict:
                 f"rate(asus_net_transmit_drops_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} drops",
                 "B")],
         "pps", min_=0, fill=0), 8, 9)
+    L.add(timeseries(
+        "Ping from the server (router, nodes, ISP gateway)",
+        [target('probe_icmp_duration_seconds{job="lan_icmp", phase="rtt"} * 1000', "{{role}} {{instance}}"),
+         target('1 - avg_over_time(probe_success{job="lan_icmp"}[5m])', "{{instance}} loss", "B")],
+        "ms", min_=0, fill=0,
+        overrides=[{"matcher": {"id": "byRegexp", "options": ".* loss"},
+                    "properties": [{"id": "unit", "value": "percentunit"},
+                                   {"id": "custom.axisPlacement", "value": "right"}]}],
+        description="Blackbox ICMP every 15 s to the targets the collector lists at `/sd/nodes`: new mesh "
+                    "nodes appear on their own. A node that's slow here but fine in smokeping points at "
+                    "the backhaul."), 24, 8)
     L.row("Wi-Fi radios")
     rinst = lambda expr, ref: target(expr, ref=ref, instant=True, table=True)  # noqa: E731
     L.add(table(
@@ -601,6 +612,22 @@ def clients(links, netalertx_url) -> dict:
     L.add(timeseries("Top Wi-Fi clients by traffic",
                      [target("topk(10, rate(asus_wifi_client_transmit_bytes_total[$__rate_interval]) * 8)",
                              "{{hostname}} {{mac}}")], "bps", min_=0, fill=0), 12, 10)
+    L.row("Device ping (LAN_CLIENT_PING)")
+    L.add(timeseries(
+        "Ping to each device",
+        [target('probe_icmp_duration_seconds{job="lan_clients", phase="rtt"} * 1000', "{{hostname}} {{mac}}")],
+        "ms", min_=0, fill=0, legend_calcs=("mean", "max", "lastNotNull"),
+        description="Empty unless `LAN_CLIENT_PING=true` in .env. One ping a minute from the server to each "
+                    "online device on the main LAN. Phones in power-save mode answer late or not at all."), 16, 9)
+    L.add(table(
+        "Not answering (last 15 min)",
+        [target('1 - avg_over_time(probe_success{job="lan_clients"}[15m]) > 0.5', ref="A", instant=True,
+                table=True)],
+        organize={"excludeByName": {"Time": True, "__name__": True, "job": True},
+                  "renameByName": {"instance": "IP", "hostname": "Device", "mac": "MAC", "Value": "Lost"}},
+        overrides=[override("Lost", unit="percentunit")],
+        description="Online per the router but losing most pings: often a firewall on the device (Windows "
+                    "blocks ping by default), sometimes a bad Wi-Fi link."), 8, 9)
     if netalertx_url:
         note = (f"Full device inventory, new-device alerts and presence history are in "
                 f"**[NetAlertX]({netalertx_url})**.")

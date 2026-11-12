@@ -97,12 +97,15 @@ Effort: S = an evening, M = a weekend, L = bigger.
       that speedtest-tracker reports, and grade A-F. Optionally run a ping series during the speed test.
 - [ ] **Per-hop path monitoring** (M) [PingPlotter, MTR]: run a traceroute every slow interval and keep loss and
       latency per hop for the first few hops. This shows which hop starts losing packets.
-- [ ] **Per-client LAN latency** (M) [UniFi client latency]: the collector serves an HTTP service-discovery
+- [x] **Per-client LAN latency** (M) [UniFi client latency]: the collector serves an HTTP service-discovery
       endpoint (`/sd/clients`, `/sd/nodes`) and Prometheus probes clients with blackbox ICMP. Opt-in, rate-limited.
-- [ ] **Auto-discovered ping targets** (S): the same `/sd/nodes` endpoint fills mesh nodes and the ISP hop
+      Done: collector serves `/sd/nodes`, `/sd/dns`, `/sd/clients` (Prometheus HTTP SD). `lan_clients` blackbox ICMP job, opt-in with `LAN_CLIENT_PING=true`, once a minute, at most `LAN_CLIENT_PING_MAX` (50) online devices on the main LAN. Panels on Clients & Wi-Fi.
+- [x] **Auto-discovered ping targets** (S): the same `/sd/nodes` endpoint fills mesh nodes and the ISP hop
       into a blackbox ICMP job. No more hand-editing `config/smokeping/config.yml`.
-- [ ] **Templated router IP** (S): the `dns` job in `prometheus.yml` hard-codes 192.168.50.1. Generate it
+      Done: `lan_icmp` blackbox job fed by `/sd/nodes` (router, mesh nodes, ISP gateway); panel on Router & Mesh. Smokeping keeps its static list (its exporter has no SD).
+- [x] **Templated router IP** (S): the `dns` job in `prometheus.yml` hard-codes 192.168.50.1. Generate it
       from `ROUTER_HOST`, or use the SD endpoint.
+      Done: the `dns` job gets the router from `/sd/dns`, which follows `ROUTER_HOST`.
 - [ ] **Syslog events** (M) [UniFi event log]: `tail -n` of `/tmp/syslog.log` since the last offset. Count
       matched events (WAN reconnect, DFS radar, auth failure, OOM, roam) as counters. Optionally send raw lines
       to Loki in an extra compose profile.

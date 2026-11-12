@@ -24,6 +24,7 @@ NVRAM_KEYS = (
     "buildno",
     "extendno",
     "lan_ipaddr",
+    "lan_netmask",
     "lan_hwaddr",
     "wan0_ifname",
     "wan0_proto",

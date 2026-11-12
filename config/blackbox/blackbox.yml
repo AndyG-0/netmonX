@@ -15,3 +15,8 @@ modules:
       preferred_ip_protocol: ip4
       follow_redirects: true
       valid_status_codes: []   # any 2xx
+  icmp:
+    prober: icmp
+    timeout: 3s
+    icmp:
+      preferred_ip_protocol: ip4

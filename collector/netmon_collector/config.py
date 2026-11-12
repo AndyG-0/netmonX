@@ -45,6 +45,8 @@ class Config:
     oui_file: str | None = None  # Wireshark `manuf` file for MAC vendor names
     client_retention_days: float = 30
     ping6_targets: list[str] = field(default_factory=list)  # used only if the router has IPv6 on
+    lan_client_ping: bool = False  # list online clients at /sd/clients for blackbox pings
+    lan_client_ping_max: int = 50
 
     @classmethod
     def from_env(cls) -> Config:
@@ -95,4 +97,6 @@ class Config:
             devices_file=_env("DEVICES_FILE") or None,
             oui_file=_env("OUI_FILE") or None,
             client_retention_days=float(_env("CLIENT_RETENTION_DAYS", "30")),
+            lan_client_ping=_bool("LAN_CLIENT_PING", False),
+            lan_client_ping_max=int(_env("LAN_CLIENT_PING_MAX", "50")),
         )

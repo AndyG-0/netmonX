@@ -17,9 +17,10 @@ scrape_configs:
     metrics_path: /probe
     params:
       module: [dns_lookup]
+    # The router's own DNS (dnsmasq) comes from the collector, so its IP follows ROUTER_HOST.
+    http_sd_configs:
+      - url: http://asus-collector:9877/sd/dns
     static_configs:
-      - targets: ["192.168.50.1:53"]   # router (dnsmasq)
-        labels: { resolver: router }
       - targets: ["1.1.1.1:53"]
         labels: { resolver: cloudflare }
       - targets: ["8.8.8.8:53"]
@@ -31,6 +32,27 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox:9115
+
+  # Router, AiMesh nodes and the ISP gateway, as the collector finds them (blackbox ICMP).
+  - job_name: lan_icmp
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://asus-collector:9877/sd/nodes
+    relabel_configs: *blackbox_relabel
+
+  # Every online LAN device. The list stays empty unless LAN_CLIENT_PING=true in .env.
+  - job_name: lan_clients
+    scrape_interval: 60s
+    scrape_timeout: 5s
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    http_sd_configs:
+      - url: http://asus-collector:9877/sd/clients
+        refresh_interval: 5m
+    relabel_configs: *blackbox_relabel
 
   # Website reachability and response time.
   - job_name: http
