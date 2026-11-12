@@ -15,5 +15,6 @@ under the new version when you cut a release.
 - Collector image published to `ghcr.io/andyg-0/netmonx-collector` for amd64 and arm64.
 - `netmonx_collector_build_info` metric with the running version.
 - GitHub Actions CI, image publishing and release workflows; `scripts/release.sh` for semver releases.
+- Collector self-metrics: SSH command duration histogram, command errors, connects and parse failures, with a "Collector" row on the Router & Mesh dashboard.
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main

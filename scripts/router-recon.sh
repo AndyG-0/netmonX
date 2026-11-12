@@ -7,6 +7,8 @@
 # Every command below only reads. Nothing is changed or installed.
 # Output goes to recon/<timestamp>/ (git-ignored). Look it over before
 # sharing: it contains MAC addresses, hostnames and your WAN IP.
+# Single-quoted commands are meant to expand on the router, not here.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 target=${1:?usage: $0 user@router-ip [ssh-key]}
@@ -42,6 +44,15 @@ run busybox 'busybox 2>&1 | head -n 40'
 run interfaces 'ip -o link 2>/dev/null || ifconfig -a'
 run routes 'ip route 2>/dev/null || route -n'
 run wl_status "for i in $ifaces; do echo \"== \$i\"; wl -i \$i status 2>&1 | head -n 15; done"
+
+# Probes for planned features. All read-only: `scanresults` reads the cached scan, never `wl scan`.
+run wl_radio "for i in $ifaces; do echo \"== \$i\"; for c in chanspec noise chanim_stats; do echo \"-- \$c\"; wl -i \$i \$c 2>&1 | head -n 20; done; done"
+run wl_scanresults "for i in $ifaces; do echo \"== \$i\"; wl -i \$i scanresults 2>&1 | head -n 60; done"
+run nvram_extra 'for k in webs_state_update webs_state_info webs_state_flag wan1_ifname wan1_proto wan1_state_t wan1_ipaddr wan1_gateway wans_dualwan wans_mode ipv6_service ipv6_rtr_addr ipv6_prefix ipv6_prefix_length vts_enable_x vts_rulelist sshd_wan sshd_enable misc_http_x misc_httpsport_x upnp_enable wps_enable wps_mode dhcp_start dhcp_end lan_netmask wgs_enable vpn_server1_state vpn_server2_state; do printf "%s=%s\n" "$k" "$(nvram get $k)"; done'
+run tools 'for t in wg ethctl robocfg et md5sum ping6 traceroute6; do printf "%s: " "$t"; command -v $t || echo missing; done; ls /tmp/*upnp* /tmp/*.leases 2>&1; ls /etc/openvpn /tmp/etc/openvpn 2>&1 | head'
+run syslog_tail 'tail -n 80 /tmp/syslog.log 2>&1'
+run nvram_show_keys 'nvram show 2>/dev/null | wc -l; nvram show 2>/dev/null | cut -d= -f1 | sort | head -n 600'
+run ports 'for i in eth0 eth1 eth2 eth3; do echo "== $i"; ethctl $i media-type 2>&1 | head -n 3; done; robocfg show 2>&1 | head -n 20'
 
 echo
 echo "Saved to $out/"

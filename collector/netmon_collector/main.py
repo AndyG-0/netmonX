@@ -13,6 +13,7 @@ from prometheus_client.registry import CollectorRegistry
 from .config import Config
 from .metrics import BuildInfoCollector, Store, StoreCollector, collector_version
 from .poller import NodePoller, SharedState
+from .selfmetrics import SELF
 from .ssh import RouterConnection
 
 log = logging.getLogger("netmon_collector")
@@ -55,6 +56,7 @@ async def run() -> None:
     registry = CollectorRegistry(auto_describe=True)
     registry.register(StoreCollector(store))
     registry.register(BuildInfoCollector())
+    SELF.register(registry)
     start_http_server(cfg.listen_port, addr=cfg.listen_addr, registry=registry)
     log.info("collector %s serving metrics on %s:%s/metrics", collector_version(), cfg.listen_addr, cfg.listen_port)
 

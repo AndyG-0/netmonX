@@ -97,8 +97,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
       phones and laptops, and graph the results (or push them via Pushgateway).
 - [ ] **DNS filtering integration** (S) [Pi-hole, AdGuard]: optional compose profile with an exporter for
       Pi-hole/AdGuard Home if the user runs one: queries, block %, top clients.
-- [ ] **Collector self-metrics** (S): per-command SSH duration histogram, reconnect counter, and output parse
+- [x] **Collector self-metrics** (S): per-command SSH duration histogram, reconnect counter, and output parse
       failures.
+      Done: `netmonx_collector_ssh_command_duration_seconds`, `_ssh_command_errors_total`, `_ssh_connects_total`, `_parse_failures_total`; "Collector" row on Router & Mesh.
 
 ## P3: usability & operations
 

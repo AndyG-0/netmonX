@@ -368,6 +368,23 @@ def router(links) -> dict:
                 f"rate(asus_net_transmit_drops_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} drops",
                 "B")],
         "pps", min_=0, fill=0), 8, 9)
+    L.row("Collector")
+    L.add(timeseries(
+        "SSH command time (p95)",
+        [target("histogram_quantile(0.95, sum by (node, command, le) "
+                f"(rate(netmonx_collector_ssh_command_duration_seconds_bucket{{{sel}}}[$__rate_interval])))",
+                "{{node}} {{command}}")],
+        "s", min_=0, fill=0, description="How long each router command takes over SSH."), 12, 8)
+    L.add(timeseries(
+        "Collector problems",
+        [target(f"sum by (node) (increase(netmonx_collector_ssh_command_errors_total{{{sel}}}[1h]))",
+                "{{node}} command errors"),
+         target(f"sum by (node) (increase(netmonx_collector_ssh_connects_total{{{sel}}}[1h]))",
+                "{{node}} SSH connects", "B"),
+         target(f"sum by (node, section) (increase(netmonx_collector_parse_failures_total{{{sel}}}[1h]))",
+                "{{node}} unparsed {{section}}", "C")],
+        "none", min_=0, fill=0,
+        description="Per hour. One connect per node is normal; more means the connection keeps dropping."), 12, 8)
     node = query_var("node", "Node", "label_values(asus_up, node)", multi=True, include_all=True)
     iface = query_var("iface", "Interface", 'label_values(asus_net_receive_bytes_total{node=~"$node"}, iface)',
                       multi=True, include_all=True)

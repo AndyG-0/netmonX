@@ -20,3 +20,51 @@ def test_collector_version_is_installed_version(monkeypatch):
 def test_collector_version_prefers_image_build_version(monkeypatch):
     monkeypatch.setenv("COLLECTOR_VERSION", "0.1.0+edge.abc1234")
     assert collector_version() == "0.1.0+edge.abc1234"
+
+
+def test_self_metrics_count_commands_and_errors():
+    import asyncio
+
+    import pytest
+
+    from netmon_collector.commands import fast_snapshot
+    from netmon_collector.selfmetrics import SelfMetrics
+    from netmon_collector.ssh import RouterConnection
+
+    class Result:
+        stdout = "ok"
+
+    class Conn:
+        fail = False
+
+        async def run(self, text, check):
+            if self.fail:
+                raise OSError("gone")
+            return Result()
+
+        def close(self):
+            pass
+
+    m = SelfMetrics()
+    rc = RouterConnection("10.0.0.1", 22, "admin", "/key", None, metrics=m)
+    rc._conn = Conn()
+    assert asyncio.run(rc.run(fast_snapshot())) == "ok"
+    rc._conn.fail = True
+    with pytest.raises(OSError):
+        asyncio.run(rc.run(fast_snapshot()))
+    assert rc._conn is None  # reset after the error
+    registry = CollectorRegistry()
+    m.register(registry)
+    text = generate_latest(registry).decode()
+    assert 'netmonx_collector_ssh_command_duration_seconds_count{command="fast_snapshot",node="10.0.0.1"} 1.0' in text
+    assert 'netmonx_collector_ssh_command_errors_total{command="fast_snapshot",node="10.0.0.1"} 1.0' in text
+
+
+def test_unparsed_sections():
+    from netmon_collector.poller import FAST_REQUIRED, unparsed_sections
+
+    assert unparsed_sections("@@net_dev\n@@loadavg\n0.1 0.2 0.3 1/2 3\n", FAST_REQUIRED) == [
+        "net_dev",
+        "meminfo",
+        "uptime",
+    ]

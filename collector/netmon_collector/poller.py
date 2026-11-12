@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 
 from . import commands, parsers
 from .metrics import Sample, Store, sample
+from .selfmetrics import SELF
 from .ssh import RouterConnection
 
 log = logging.getLogger(__name__)
@@ -196,6 +197,21 @@ def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], na
     return nodes, display
 
 
+# Sections every router returns; if one comes back empty or unparsable, it counts as a parse failure.
+FAST_REQUIRED = {
+    "net_dev": parsers.parse_net_dev,
+    "loadavg": parsers.parse_loadavg,
+    "meminfo": parsers.parse_meminfo,
+    "uptime": parsers.parse_uptime,
+}
+SLOW_REQUIRED = {"nvram": parsers.parse_kv}
+
+
+def unparsed_sections(text: str, required: dict) -> list[str]:
+    sec = parsers.section_map(text)
+    return [name for name, parse in required.items() if not parse(sec.get(name, ""))]
+
+
 # --- poller ---------------------------------------------------------------
 
 
@@ -235,6 +251,11 @@ class NodePoller:
         self._errors: dict[str, int] = {}
         self._ping_totals: dict[str, list[int]] = {}  # target -> [sent, received]
         self._ok: dict[str, bool] = {}
+        self.metrics = SELF
+
+    def _count_unparsed(self, text: str, required: dict) -> None:
+        for name in unparsed_sections(text, required):
+            self.metrics.parse_failures.labels(self.node, name).inc()
 
     # Each loop reports its own health; the node is up only if every loop is.
     def _mark(self, loop: str, ok: bool) -> None:
@@ -263,6 +284,7 @@ class NodePoller:
 
     async def poll_slow(self) -> None:
         text = await self.conn.run(commands.slow_snapshot())
+        self._count_unparsed(text, SLOW_REQUIRED)
         sec = parsers.section_map(text)
         nv = parsers.parse_kv(sec.get("nvram", ""))
         self.wan_iface = nv.get("wan0_ifname") or self.wan_iface
@@ -301,7 +323,10 @@ class NodePoller:
         self.shared.hostnames = {**self.shared.hostnames, **app_names}
         primary_mac = nv.get("lan_hwaddr", "").upper()
         nodes, display = node_labels(self.node, primary_mac, self.shared.mesh_nodes, app_names)
-        raw = parsers.parse_clientlist(await self.conn.run(commands.clients_snapshot()))
+        raw_text = await self.conn.run(commands.clients_snapshot())
+        raw = parsers.parse_clientlist(raw_text)
+        if raw_text.strip() and not raw:
+            self.metrics.parse_failures.labels(self.node, "clientlist").inc()
         clients = parsers.dedupe_clients(raw, primary_mac, set(nodes))
         ssids = {k[: -len("_ssid")]: v for k, v in nv.items() if k.endswith("_ssid") and k.startswith("wl")}
         self.store.set(
@@ -375,6 +400,7 @@ class NodePoller:
             targets += [(t, "internet") for t in self.ping_targets if t != self.isp_hop]
             tasks += [self.conn.run(commands.ping(t, self.ping_count)) for t, _ in targets]
         results = await asyncio.gather(*tasks)
+        self._count_unparsed(results[0], FAST_REQUIRED)
         self.store.set(self.node, "fast", fast_samples(self.node, results[0], self.wan_iface, self.is_primary))
 
         ping_out: list[Sample | None] = []
