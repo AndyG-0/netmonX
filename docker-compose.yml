@@ -1,0 +1,112 @@
+# netmonX: home network monitoring for a stock Asus router or mesh.
+# Start: cp .env.example .env (then edit), add secrets/router_key, then `docker compose pull && docker compose up -d`.
+name: netmonx
+
+services:
+  # Custom: reads the router over SSH (read-only) and serves Prometheus metrics.
+  asus-collector:
+    # Released image; pin the version with NETMONX_VERSION in .env.
+    image: ghcr.io/andyg-0/netmonx-collector:${NETMONX_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      ROUTER_HOST: ${ROUTER_HOST:?set ROUTER_HOST in .env}
+      ROUTER_PORT: ${ROUTER_PORT:-22}
+      ROUTER_USER: ${ROUTER_USER:-admin}
+      ROUTER_KEY_PATH: /run/secrets/router_key
+      ROUTER_KNOWN_HOSTS: ${ROUTER_KNOWN_HOSTS:-}
+      ROUTER_PING_TARGETS: ${ROUTER_PING_TARGETS:-1.1.1.1,8.8.8.8}
+      PING_COUNT: ${PING_COUNT:-5}
+      ISP_HOP: ${ISP_HOP:-auto}
+      MESH_NODES: ${MESH_NODES:-auto}
+      MESH_SSH: ${MESH_SSH:-true}
+      FAST_INTERVAL: ${FAST_INTERVAL:-15}
+      SLOW_INTERVAL: ${SLOW_INTERVAL:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # Run as the host user that owns secrets/router_key, so the key can stay chmod 600.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - ./secrets/router_key:/run/secrets/router_key:ro
+
+  # LAN-side latency, jitter and loss (SmokePing-style histograms).
+  smokeping:
+    image: quay.io/superq/smokeping-prober:v0.12.0
+    restart: unless-stopped
+    cap_add: [NET_RAW]
+    command: ["--config.file=/etc/smokeping/config.yml"]
+    volumes:
+      - ./config/smokeping/config.yml:/etc/smokeping/config.yml:ro
+
+  # DNS lookup time and website reachability.
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.0
+    restart: unless-stopped
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    volumes:
+      - ./config/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+  # Scheduled speed tests, with its own web UI on :18765.
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker:1.15.0
+    restart: unless-stopped
+    ports: ["${SPEEDTEST_PORT:-18765}:80"]
+    environment:
+      # Data lives in a named volume, so this needn't match a host user (must not be 0).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: ${TZ:-UTC}
+      APP_KEY: ${SPEEDTEST_APP_KEY:?set SPEEDTEST_APP_KEY in .env}
+      APP_URL: ${SPEEDTEST_APP_URL:-http://localhost:18765}
+      DB_CONNECTION: sqlite
+      SPEEDTEST_SCHEDULE: ${SPEEDTEST_SCHEDULE:-17 */2 * * *}
+      DISPLAY_TIMEZONE: ${TZ:-UTC}
+    volumes:
+      - speedtest_data:/config
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    ports: ["${PROMETHEUS_PORT:-9090}:9090"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-365d}
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    restart: unless-stopped
+    ports: ["${GRAFANA_PORT:-3000}:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/overview.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+
+  # Device discovery and new-device alerts, with its own web UI on :20211.
+  # Host networking is needed so ARP scans can see the LAN.
+  netalertx:
+    image: jokobsk/netalertx:26.10.0
+    restart: unless-stopped
+    network_mode: host
+    cap_add: [NET_RAW, NET_ADMIN, NET_BIND_SERVICE]
+    environment:
+      TZ: ${TZ:-UTC}
+      PORT: "20211"
+    tmpfs:
+      - /tmp:uid=20211,gid=20211,mode=1700
+    volumes:
+      - netalertx_data:/data
+    # Enabled by COMPOSE_PROFILES=netalertx in .env; remove it there to skip NetAlertX.
+    profiles: ["netalertx"]
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  speedtest_data:
+  netalertx_data:

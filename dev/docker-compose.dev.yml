@@ -1,0 +1,17 @@
+# Dev only: runs the stack against a fake router container.
+# Paths are relative to the project root (the first compose file's folder).
+#   scripts/dev-up.sh
+services:
+  fake-router:
+    build: ./dev/fake-router
+    cap_add: [NET_RAW]
+    volumes:
+      - ./secrets/dev_key.pub:/keys/authorized_keys:ro
+
+  # Build the collector from source instead of pulling the released image.
+  asus-collector:
+    build: ./collector
+    image: netmonx-collector:dev
+    depends_on: [fake-router]
+    volumes:
+      - ./secrets/dev_key:/run/secrets/router_key:ro

@@ -1,0 +1,30 @@
+#!/bin/sh
+# Fake Asus nvram: read-only `nvram get KEY`. Anything else fails loudly.
+[ "$1" = "get" ] || { echo "fake nvram: only 'get' is supported" >&2; exit 1; }
+gw=$(ip route | awk '/default/ {print $3; exit}')
+ifc=$(ip route | awk '/default/ {print $5; exit}')
+case "$2" in
+  productid) echo XT8-FAKE ;;
+  firmver) echo 3.0.0.4 ;;
+  buildno) echo 388 ;;
+  extendno) echo 99999-fake ;;
+  lan_ipaddr) echo 192.168.50.1 ;;
+  lan_hwaddr) echo 02:00:00:aa:bb:01 ;;
+  wan0_ifname) echo "$ifc" ;;
+  wan0_proto) echo dhcp ;;
+  wan0_state_t) echo 2 ;;
+  wan0_ipaddr) ip -4 -o addr show "$ifc" | awk '{print $4}' | cut -d/ -f1 ;;
+  wan0_gateway) echo "$gw" ;;
+  wan0_dns) echo "1.1.1.1 8.8.8.8" ;;
+  link_wan) echo 1 ;;
+  wl_ifnames) echo "eth4 eth5" ;;
+  wl0_ifname) echo eth4 ;;
+  wl1_ifname) echo eth5 ;;
+  wl0_vifs) echo wl0.1 ;;
+  wl0_ssid|wl1_ssid) echo HomeNet ;;
+  wl0.1_ssid) echo HomeNet_Guest ;;
+  # A second (fake) mesh node; with MESH_NODES=none it isn't polled, but it shows up in the client list.
+  cfg_device_list) echo "<XT8>192.168.50.1>02:00:00:AA:BB:01>1<XT8>192.168.50.2>02:00:00:AA:BB:02>1" ;;
+  custom_clientlist) echo "<Living room TV>3C:22:FB:00:11:22>0>0>>>><Office node>02:00:00:AA:BB:02>0>0>>>>" ;;
+  *) echo "" ;;
+esac

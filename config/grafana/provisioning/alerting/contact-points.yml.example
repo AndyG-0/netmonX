@@ -1,0 +1,17 @@
+# Optional: send alerts to ntfy (phone push). Copy to contact-points.yml,
+# set your topic, and restart Grafana. Pick a hard-to-guess topic name,
+# or use your own ntfy server: anyone who knows a public topic can read it.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: ntfy
+    receivers:
+      - uid: ntfy
+        type: webhook
+        settings:
+          url: https://ntfy.sh/netmonx-CHANGE-ME
+          httpMethod: POST
+policies:
+  - orgId: 1
+    receiver: ntfy
+    group_by: [alertname]

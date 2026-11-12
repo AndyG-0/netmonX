@@ -1,0 +1,7 @@
+# gitleaks (CI secret scan): default rules, plus known non-secrets.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Throwaway dev values: the fake-router stack's Speedtest key, and test fixtures"
+paths = ['''^dev/dev\.env$''', '''^collector/tests/fixtures/''']

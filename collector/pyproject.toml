@@ -1,0 +1,34 @@
+[project]
+name = "netmon-collector"
+version = "0.1.0"
+description = "Read-only SSH collector for stock Asuswrt routers, exposing Prometheus metrics"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncssh==2.21.0",
+    # 47+ crashes ("Illegal instruction") on some ARM VMs; 46.x works everywhere.
+    "cryptography==46.0.7",
+    "prometheus-client==0.22.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.4.1", "ruff==0.12.4", "watchfiles==1.1.0"]
+
+[project.scripts]
+netmon-collector = "netmon_collector.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["netmon_collector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]

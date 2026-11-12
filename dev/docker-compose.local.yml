@@ -1,0 +1,19 @@
+# Local dev (./dev.sh): the collector runs on this machine, not in a container.
+# dev.sh writes dev/.prometheus.local.yml, which scrapes the collector on the host.
+services:
+  prometheus:
+    volumes:
+      - ./dev/.prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+
+  # Same dashboards, with links to localhost (dev.sh writes dev/.dashboards).
+  grafana:
+    volumes:
+      - ./dev/.dashboards:/var/lib/grafana/dashboards:ro
+
+  # Only started by `./dev.sh fake`. Reached from the host on 127.0.0.1:2222.
+  fake-router:
+    build: ./dev/fake-router
+    cap_add: [NET_RAW]
+    ports: ["127.0.0.1:2222:22"]
+    volumes:
+      - ./secrets/dev_key.pub:/keys/authorized_keys:ro

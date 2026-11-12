@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+install -d -m 700 /root/.ssh
+install -m 600 /keys/authorized_keys /root/.ssh/authorized_keys
+cat > /var/lib/misc/dnsmasq.leases <<LEASES
+86213 7c:d9:5c:11:22:33 192.168.50.23 Pixel-8 01:7c:d9:5c:11:22:33
+85120 a4:83:e7:44:55:66 192.168.50.41 * *
+LEASES
+chmod 644 /var/lib/misc/dnsmasq.leases
+# AiMesh client list: main router (…:01) and one mesh node (…:02). The NAS shows twice, like on a real
+# router: wired on the main router (seen over the backhaul) and Wi-Fi on the node.
+cat > /tmp/clientlist.json <<'JSON'
+{"02:00:00:AA:BB:01":{"2G":{"3C:22:FB:00:11:22":{"ip":"192.168.50.60","rssi":"-58"}},"2G_1":{"5E:11:22:33:44:55":{"ip":"192.168.101.20","rssi":"-66"}},"5G":{"7C:D9:5C:11:22:33":{"ip":"192.168.50.23","rssi":"-49"},"A4:83:E7:44:55:66":{"ip":"192.168.50.41","rssi":"-71"}},"wired_mac":{"00:11:32:AA:00:01":{"ip":"192.168.50.10"},"02:00:00:AA:BB:02":{"ip":"192.168.50.2"},"D0:50:99:00:00:09":{"ip":"192.168.50.70"}}},
+ "02:00:00:AA:BB:02":{"5G":{"D0:50:99:00:00:09":{"ip":"192.168.50.70","rssi":"-62"}},"wired_mac":{"B8:27:EB:00:00:05":{"ip":"192.168.50.80"}}}}
+JSON
+# -s: no password logins, -R: create host keys, -F/-E: foreground, log to stderr
+exec dropbear -F -E -R -s -p 22

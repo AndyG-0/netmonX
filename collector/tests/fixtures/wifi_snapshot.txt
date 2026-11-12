@@ -1,0 +1,37 @@
+@@wl_temp eth4
+58 (0x3a)
+@@wl_temp eth5
+@@wl_temp eth6
+61 (0x3d)
+@@ssid eth4
+Current SSID: "HomeNet"
+@@ssid eth5
+Current SSID: "HomeNet"
+@@ssid eth6
+Current SSID: "HomeNet"
+@@ssid wl0.1
+Current SSID: "HomeNet_Guest"
+@@ssid wl2.5
+Current SSID: ""
+@@sta eth6 7C:D9:5C:11:22:33
+-52
+ STA 7C:D9:5C:11:22:33:
+	 aid:2
+	 idle 0 seconds
+	 in network 3612 seconds
+	 state: AUTHENTICATED ASSOCIATED AUTHORIZED
+	 tx total pkts: 912341
+	 tx total bytes: 1123412341
+	 rx data pkts: 412341
+	 rx data bytes: 51234123
+	 rate of last tx pkt: 1201000 kbps - 1201000 kbps
+	 rate of last rx pkt: 864800 kbps
+	 per antenna rssi of last rx data frame: -51 -53 0 0
+	 per antenna average rssi of rx data frames: -52 -54 0 0
+@@sta eth4 A4:83:E7:44:55:66
+0
+ STA A4:83:E7:44:55:66:
+	 in network 120 seconds
+	 rate of last tx pkt: 72200 kbps
+	 rate of last rx pkt: 65000 kbps
+	 smoothed rssi: -71

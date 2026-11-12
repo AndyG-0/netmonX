@@ -1,0 +1,218 @@
+# Build and push the collector image to ghcr.io, and create a GitHub Release for version tags.
+#   push to main   -> :edge, :sha-<short>
+#   tag v1.2.3     -> :1.2.3, :1.2, :1 (from 1.0.0 on), :latest, plus a GitHub Release
+#   tag v1.3.0-rc.1 -> :1.3.0-rc.1 only, plus a GitHub prerelease
+# Tags are made by scripts/release.sh.
+name: publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel a run that may be pushing images or creating a release.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/andyg-0/netmonx-collector
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  version:
+    name: version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      image-version: ${{ steps.v.outputs.image-version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: v
+        name: Check the tag against pyproject.toml and CHANGELOG.md
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' collector/pyproject.toml)
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            [[ ${GITHUB_REF_NAME#v} == "$version" ]] \
+              || { echo "::error::tag $GITHUB_REF_NAME doesn't match collector/pyproject.toml version $version"; exit 1; }
+            scripts/changelog.sh section "$version" > /dev/null \
+              || { echo "::error::CHANGELOG.md has no section for $version"; exit 1; }
+            image_version=$version
+          else
+            image_version="$version+edge.${GITHUB_SHA::7}"
+          fi
+          prerelease=false; [[ $version == *-* ]] && prerelease=true
+          {
+            echo "version=$version"
+            echo "image-version=$image_version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "version $version, image version $image_version, prerelease $prerelease"
+
+  build:
+    name: build ${{ matrix.platform }}
+    needs: [ci, version]
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Platform slug
+        run: echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.version.outputs.image-version }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: collector
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.image-version }}
+            REVISION=${{ github.sha }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=collector-${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,scope=collector-${{ env.PLATFORM_PAIR }},mode=max
+          provenance: mode=max
+          sbom: true
+      - name: Save digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: mkdir -p "$RUNNER_TEMP/digests" && touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: tag multi-arch image
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          # Prereleases get only {{version}}; latest is added for stable version tags (latest=auto).
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=edge,branch=main
+            type=sha,enable=${{ github.ref == 'refs/heads/main' }}
+      - name: Create manifest list and push tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          mapfile -t tags < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          ((${#tags[@]})) || { echo "::error::no image tags for $GITHUB_REF"; exit 1; }
+          args=(); for t in "${tags[@]}"; do args+=(-t "$t"); done
+          for d in *; do args+=("$IMAGE@sha256:$d"); done
+          docker buildx imagetools create "${args[@]}"
+      - name: Check both platforms
+        env:
+          TAG: ${{ steps.meta.outputs.version }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE:$TAG"
+          platforms=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{json .Manifest}}' \
+            | jq -r '.manifests[].platform | select(.os != "unknown") | .os + "/" + .architecture' | sort | tr '\n' ' ')
+          echo "platforms: $platforms"
+          [[ $platforms == "linux/amd64 linux/arm64 " ]] || { echo "::error::expected linux/amd64 and linux/arm64"; exit 1; }
+          echo "### Image" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.tags[] | "- `" + . + "`"' <<< "$DOCKER_METADATA_OUTPUT_JSON" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [version, merge]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Deploy bundle
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          tar -czf "dist/netmonx-$VERSION.tar.gz" --transform "s,^,netmonx-$VERSION/," \
+            docker-compose.yml .env.example config dashboards secrets/README.md README.md CHANGELOG.md LICENSE
+          (cd dist && sha256sum "netmonx-$VERSION.tar.gz" > "netmonx-$VERSION.tar.gz.sha256")
+          tar -tzf "dist/netmonx-$VERSION.tar.gz"
+      - name: Release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          {
+            scripts/changelog.sh section "$VERSION"
+            echo
+            echo "### Install or upgrade"
+            echo
+            echo "Set \`NETMONX_VERSION=$VERSION\` in \`.env\`, then:"
+            echo
+            echo '```sh'
+            echo "docker compose pull && docker compose up -d"
+            echo '```'
+            echo
+            echo "Image: \`$IMAGE:$VERSION\` (linux/amd64, linux/arm64). New install: download \`netmonx-$VERSION.tar.gz\` below and follow the README."
+          } > notes.md
+          cat notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          flags=(); [[ $PRERELEASE == true ]] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "netmonX $GITHUB_REF_NAME" \
+            --notes-file notes.md --generate-notes "${flags[@]}" dist/*

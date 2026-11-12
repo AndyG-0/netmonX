@@ -1,0 +1,25 @@
+#!/bin/sh
+# Fake Broadcom `wl` with two clients on eth5 and one on eth4.
+iface=$2; cmd=$3; mac=$4
+case "$cmd" in
+  phy_tempsense) echo "57 (0x39)" ;;
+  assoclist)
+    [ "$iface" = eth5 ] && { echo "assoclist 7C:D9:5C:11:22:33"; echo "assoclist A4:83:E7:44:55:66"; }
+    [ "$iface" = eth4 ] && echo "assoclist 3C:22:FB:00:11:22"
+    [ "$iface" = wl0.1 ] && echo "assoclist 5E:11:22:33:44:55"
+    ;;
+  ssid)
+    case "$iface" in eth4|eth5) echo 'Current SSID: "HomeNet"' ;; wl0.1) echo 'Current SSID: "HomeNet_Guest"' ;; *) echo 'Current SSID: ""' ;; esac ;;
+  rssi) echo "-$(( 45 + $(date +%S) % 30 ))" ;;
+  sta_info)
+    cat <<INFO
+ STA $mac:
+	 in network $(( $(cut -d. -f1 /proc/uptime) )) seconds
+	 tx total bytes: $(( $(date +%s) % 100000000 ))
+	 rx data bytes: $(( $(date +%s) % 10000000 ))
+	 rate of last tx pkt: 1201000 kbps - 1201000 kbps
+	 rate of last rx pkt: 864800 kbps
+INFO
+    ;;
+  *) echo "fake wl: unsupported" >&2; exit 1 ;;
+esac

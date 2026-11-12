@@ -1,0 +1,128 @@
+# Quality checks. Runs on pull requests, and from publish.yml before any image is pushed.
+name: ci
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ACTIONLINT_VERSION: 1.7.12
+  TRIVY_VERSION: v0.76.1
+
+jobs:
+  check:
+    name: lint, tests, dashboards, compose
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: collector/pyproject.toml
+      - name: Install actionlint
+        run: |
+          bash <(curl -sSfL "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT_VERSION}/scripts/download-actionlint.bash") \
+            "$ACTIONLINT_VERSION" "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      # The same checks as on a dev machine.
+      - run: ./dev.sh check
+
+  image:
+    name: image build, smoke test, scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Version
+        id: version
+        run: echo "version=$(sed -n 's/^version = "\(.*\)"$/\1/p' collector/pyproject.toml)+ci.${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: collector
+          load: true
+          tags: netmonx-collector:ci
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=collector-linux-amd64
+      - name: Smoke test (no router; metrics must still be served)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/key" && chmod 644 "$RUNNER_TEMP/key"
+          docker run -d --name smoke -p 127.0.0.1:9877:9877 \
+            -e ROUTER_HOST=127.0.0.1 -e ROUTER_KEY_PATH=/key -e MESH_NODES=none -e FAST_INTERVAL=2 \
+            -v "$RUNNER_TEMP/key:/key:ro" netmonx-collector:ci
+          for _ in $(seq 30); do
+            if curl -sf localhost:9877/metrics > metrics.txt \
+               && grep -q '^asus_up' metrics.txt \
+               && grep -qF "netmonx_collector_build_info{version=\"$VERSION\"} 1.0" metrics.txt; then
+              echo "metrics OK"; grep -E '^(asus_up|netmonx_collector_build_info)' metrics.txt; exit 0
+            fi
+            sleep 1
+          done
+          docker logs smoke; cat metrics.txt || true; exit 1
+      - name: Scan image (fixable HIGH/CRITICAL fail the build)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          image-ref: netmonx-collector:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+  e2e:
+    name: end to end (fake router)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start the collector against the fake router
+        run: scripts/dev-up.sh up -d --build --wait fake-router asus-collector
+      - name: Collector reads the fake router over SSH
+        run: |
+          for _ in $(seq 60); do
+            scripts/dev-up.sh exec -T asus-collector python -c \
+              "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9877/metrics').read().decode())" \
+              > metrics.txt 2>/dev/null || true
+            if grep -Eq '^asus_up\{[^}]*\} 1\.0$' metrics.txt; then
+              echo "asus_up is 1"; grep -c '^asus_' metrics.txt | xargs echo "asus_* samples:"; exit 0
+            fi
+            sleep 2
+          done
+          echo "collector never reported asus_up 1"; cat metrics.txt; exit 1
+      - name: Logs
+        if: failure()
+        run: scripts/dev-up.sh logs --no-color
+      - name: Stop
+        if: always()
+        run: scripts/dev-up.sh down -v
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"

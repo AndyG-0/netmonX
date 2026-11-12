@@ -1,0 +1,39 @@
+@@nvram
+productid=XT8
+model=
+firmver=3.0.0.4
+buildno=388
+extendno=24353-g1a2b3c4
+lan_ipaddr=192.168.50.1
+lan_hwaddr=04:d9:f5:aa:bb:01
+wan0_ifname=eth0
+wan0_proto=dhcp
+wan0_state_t=2
+wan0_ipaddr=73.12.34.56
+wan0_gateway=73.12.34.1
+wan0_dns=75.75.75.75 75.75.76.76
+link_wan=1
+wl_ifnames=eth4 eth5 eth6
+wl0_ifname=eth4
+wl1_ifname=eth5
+wl2_ifname=eth6
+wl3_ifname=
+cfg_device_list=<XT8>192.168.50.1>04:D9:F5:AA:BB:01>1<XT8>192.168.50.2>04:D9:F5:AA:BB:02>0<XT8>192.168.50.3>04:D9:F5:AA:BB:03>0<XT8>192.168.50.4>04:D9:F5:AA:BB:04>0
+custom_clientlist=<Living room TV>A4:83:E7:44:55:66>0>0>>>><Office>04:D9:F5:AA:BB:02>0>0>>>>
+wl0_vifs=wl0.1
+wl2_vifs=wl2.5
+wl0_ssid=HomeNet
+wl1_ssid=HomeNet
+wl2_ssid=HomeNet
+wl0.1_ssid=HomeNet_Guest
+@@thermal
+/sys/class/thermal/thermal_zone0/temp 67542
+@@leases
+86213 7c:d9:5c:11:22:33 192.168.50.23 Pixel-8 01:7c:d9:5c:11:22:33
+85120 a4:83:e7:44:55:66 192.168.50.41 * 01:a4:83:e7:44:55:66
+@@arp
+IP address       HW type     Flags       HW address            Mask     Device
+192.168.50.23    0x1         0x2         7c:d9:5c:11:22:33     *        br0
+192.168.50.41    0x1         0x2         a4:83:e7:44:55:66     *        br0
+192.168.50.99    0x1         0x0         00:00:00:00:00:00     *        br0
+73.12.34.1       0x1         0x2         00:01:5c:99:88:77     *        eth0

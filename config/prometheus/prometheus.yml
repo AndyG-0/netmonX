@@ -1,0 +1,56 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: asus
+    static_configs:
+      - targets: ["asus-collector:9877"]
+
+  # LAN-side pings. Edit targets in config/smokeping/config.yml.
+  - job_name: smokeping
+    static_configs:
+      - targets: ["smokeping:9374"]
+
+  # DNS lookup time. Targets are DNS servers; the query name is set in blackbox.yml.
+  - job_name: dns
+    metrics_path: /probe
+    params:
+      module: [dns_lookup]
+    static_configs:
+      - targets: ["192.168.50.1:53"]   # router (dnsmasq)
+        labels: { resolver: router }
+      - targets: ["1.1.1.1:53"]
+        labels: { resolver: cloudflare }
+      - targets: ["8.8.8.8:53"]
+        labels: { resolver: google }
+    relabel_configs: &blackbox_relabel
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  # Website reachability and response time.
+  - job_name: http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://www.google.com
+          - https://www.cloudflare.com
+          - https://www.netflix.com
+    relabel_configs: *blackbox_relabel
+
+  # Turn on in Speedtest Tracker: Settings → Data Integration → Prometheus.
+  - job_name: speedtest
+    scrape_interval: 60s
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ["speedtest-tracker:80"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

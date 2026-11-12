@@ -1,0 +1,163 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: netmonx
+    folder: netmonX
+    interval: 1m
+    rules:
+      - uid: router-unreachable
+        title: Router or mesh node not answering SSH
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min by (node) (asus_up)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 2m
+        noDataState: Alerting
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $$labels.node }} has failed polls for 2 minutes (or the collector is down)."
+      - uid: wan-down
+        title: WAN down
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min(asus_wan_up)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "The router reports the internet connection as down."
+      - uid: packet-loss
+        title: Internet packet loss above 2%
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min(avg_over_time(asus_ping_loss_ratio{role="internet"}[5m]))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.02] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Every internet ping target from the router has lost more than 2% of pings for 5+ minutes."
+      - uid: latency-high
+        title: Internet latency over 2x normal
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min(avg_over_time(asus_ping_rtt_avg_ms{role="internet"}[10m]) / avg_over_time(asus_ping_rtt_avg_ms{role="internet"}[1d] offset 10m))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Router-side latency to every internet target is more than double its 24-hour average."
+      - uid: lan-host-unreachable
+        title: LAN host not answering pings
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: '1 - sum by (host) (rate(smokeping_response_duration_seconds_count{host=~"(10|192\\.168|172\\.(1[6-9]|2[0-9]|3[01]))\\..*"}[2m])) / sum by (host) (rate(smokeping_requests_total{host=~"(10|192\\.168|172\\.(1[6-9]|2[0-9]|3[01]))\\..*"}[2m]))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $$labels.host }} (router or mesh node) stopped answering pings from the Docker host."
+      - uid: speedtest-slow
+        title: Speed test under half of normal
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'last_over_time(speedtest_tracker_download_bits[3h]) / quantile_over_time(0.5, speedtest_tracker_download_bits[7d])'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [0.5] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "The latest download speed test is below half of the 7-day median."

@@ -1,0 +1,36 @@
+# Weekly dependency updates, grouped to keep the PR count down.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    labels: [dependencies]
+    groups:
+      actions: { patterns: ["*"] }
+
+  - package-ecosystem: pip
+    directory: /collector
+    schedule: { interval: weekly }
+    labels: [dependencies]
+    groups:
+      python: { patterns: ["*"] }
+    ignore:
+      # Pinned on purpose: 47+ crashes ("Illegal instruction") on some ARM VMs. See README.
+      - dependency-name: cryptography
+        versions: [">=47"]
+
+  - package-ecosystem: docker
+    directories: [/collector, /dev/fake-router]
+    schedule: { interval: weekly }
+    labels: [dependencies]
+    ignore:
+      # Stay on Python 3.12 until it's bumped deliberately (pyproject requires-python too).
+      - dependency-name: python
+        update-types: [version-update:semver-minor, version-update:semver-major]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly }
+    labels: [dependencies]
+    groups:
+      compose: { patterns: ["*"] }

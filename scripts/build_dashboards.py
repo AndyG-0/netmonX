@@ -1,0 +1,487 @@
+#!/usr/bin/env python3
+"""Generate the Grafana dashboards in dashboards/*.json.
+
+Run after changing this file or the URLs in .env:
+    python3 scripts/build_dashboards.py
+
+Environment variables override .env, and --out writes somewhere else (./dev.sh uses both for local links):
+    SPEEDTEST_APP_URL=http://localhost:18765 python3 scripts/build_dashboards.py --out dev/.dashboards
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+DS = {"type": "prometheus", "uid": "prometheus"}
+PRIVATE_HOSTS = r'host=~"(10|192\\.168|172\\.(1[6-9]|2[0-9]|3[01]))\\..*"'
+PUBLIC_HOSTS = r'host!~"(10|192\\.168|172\\.(1[6-9]|2[0-9]|3[01]))\\..*"'
+SPEED = lambda m: f'speedtest_tracker_{m}'  # noqa: E731  (names from Speedtest Tracker's PrometheusMetricsService)
+
+
+def read_env() -> dict[str, str]:
+    env = {}
+    path = ROOT / ".env"
+    if not path.exists():
+        path = ROOT / ".env.example"
+    for line in path.read_text().splitlines():
+        key, sep, value = line.partition("=")
+        if sep and not key.startswith("#"):
+            env[key.strip()] = value.strip().strip('"').strip("'")
+    for key in ("NETALERTX_URL", "SPEEDTEST_APP_URL"):
+        if key in os.environ:
+            env[key] = os.environ[key]
+    return env
+
+
+# --- panel helpers --------------------------------------------------------
+
+
+class Layout:
+    """Places panels left to right, wrapping at 24 columns."""
+
+    def __init__(self) -> None:
+        self.x = self.y = self.row_h = 0
+        self.next_id = 1
+        self.panels: list[dict] = []
+
+    def add(self, panel: dict, w: int, h: int) -> None:
+        if self.x + w > 24:
+            self.x, self.y, self.row_h = 0, self.y + self.row_h, 0
+        panel["id"] = self.next_id
+        panel["gridPos"] = {"x": self.x, "y": self.y, "w": w, "h": h}
+        self.next_id += 1
+        self.x += w
+        self.row_h = max(self.row_h, h)
+        self.panels.append(panel)
+
+    def row(self, title: str) -> None:
+        if self.x:
+            self.x, self.y, self.row_h = 0, self.y + self.row_h, 0
+        self.panels.append(
+            {"type": "row", "title": title, "id": self.next_id, "collapsed": False,
+             "gridPos": {"x": 0, "y": self.y, "w": 24, "h": 1}, "panels": []}
+        )
+        self.next_id += 1
+        self.y += 1
+
+
+def target(expr: str, legend: str = "", ref: str = "A", instant: bool = False, table: bool = False) -> dict:
+    t = {"datasource": DS, "expr": expr, "legendFormat": legend, "refId": ref}
+    if instant:
+        t["instant"], t["range"] = True, False
+    if table:
+        t["format"] = "table"
+    return t
+
+
+def thresholds(*steps: tuple[float | None, str]) -> dict:
+    return {"mode": "absolute", "steps": [{"value": v, "color": c} for v, c in steps]}
+
+
+def stat(title, expr, unit="none", legend="", steps=None, mappings=None, decimals=None, text_mode="auto",
+         description="", graph=False, color_mode="value", reduce="lastNotNull"):
+    defaults = {"unit": unit, "thresholds": steps or thresholds((None, "green"))}
+    if mappings:
+        defaults["mappings"] = mappings
+    if decimals is not None:
+        defaults["decimals"] = decimals
+    return {
+        "type": "stat", "title": title, "description": description, "datasource": DS,
+        "targets": [target(expr, legend)],
+        "fieldConfig": {"defaults": defaults, "overrides": []},
+        "options": {"reduceOptions": {"calcs": [reduce], "fields": "", "values": False},
+                    "colorMode": color_mode, "graphMode": "area" if graph else "none",
+                    "textMode": text_mode, "justifyMode": "center"},
+    }
+
+
+def timeseries(title, targets, unit="none", description="", stack=False, min_=None, fill=10,
+               overrides=None, legend_calcs=("mean", "max")):
+    custom = {"lineWidth": 1, "fillOpacity": fill, "showPoints": "never", "spanNulls": False,
+              "stacking": {"mode": "normal" if stack else "none"}}
+    defaults = {"unit": unit, "custom": custom}
+    if min_ is not None:
+        defaults["min"] = min_
+    return {
+        "type": "timeseries", "title": title, "description": description, "datasource": DS,
+        "targets": targets,
+        "fieldConfig": {"defaults": defaults, "overrides": overrides or []},
+        "options": {"legend": {"displayMode": "table", "placement": "bottom", "calcs": list(legend_calcs)},
+                    "tooltip": {"mode": "multi", "sort": "desc"}},
+    }
+
+
+def state_timeline(title, targets, description=""):
+    return {
+        "type": "state-timeline", "title": title, "description": description, "datasource": DS,
+        "targets": targets,
+        "fieldConfig": {"defaults": {
+            "mappings": [{"type": "value", "options": {
+                "0": {"text": "Down", "color": "red"}, "1": {"text": "Up", "color": "green"}}}],
+            "thresholds": thresholds((None, "red"), (1, "green")),
+            "color": {"mode": "thresholds"}}, "overrides": []},
+        "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8},
+    }
+
+
+def heatmap(title, expr, description=""):
+    return {
+        "type": "heatmap", "title": title, "description": description, "datasource": DS,
+        "targets": [{**target(expr, "{{le}}"), "format": "heatmap"}],
+        "options": {"calculate": False, "yAxis": {"unit": "s"},
+                    "color": {"mode": "scheme", "scheme": "Spectral", "reverse": True, "exponent": 0.5},
+                    "cellGap": 0, "tooltip": {"mode": "single", "yHistogram": True}},
+    }
+
+
+def table(title, targets, organize=None, overrides=None, description="", sort=None):
+    transformations = [{"id": "merge", "options": {}}]
+    if organize:
+        transformations.append({"id": "organize", "options": organize})
+    panel = {
+        "type": "table", "title": title, "description": description, "datasource": DS,
+        "targets": targets, "transformations": transformations,
+        "fieldConfig": {"defaults": {"custom": {"align": "auto", "filterable": True}}, "overrides": overrides or []},
+        "options": {"showHeader": True, "cellHeight": "sm"},
+    }
+    if sort:
+        panel["options"]["sortBy"] = [{"displayName": sort[0], "desc": sort[1]}]
+    return panel
+
+
+def bargauge(title, expr, legend, description=""):
+    return {
+        "type": "bargauge", "title": title, "description": description, "datasource": DS,
+        "targets": [target(expr, legend, instant=True)],
+        "fieldConfig": {"defaults": {"unit": "none", "min": 0, "decimals": 0,
+                                     "color": {"mode": "palette-classic"},
+                                     "thresholds": thresholds((None, "green"))}, "overrides": []},
+        "options": {"orientation": "horizontal", "displayMode": "basic", "showUnfilled": True,
+                    "valueMode": "text", "namePlacement": "left", "sizing": "auto",
+                    "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}},
+    }
+
+
+def text(title, content):
+    return {"type": "text", "title": title, "options": {"mode": "markdown", "content": content}}
+
+
+def override(name, **props):
+    return {"matcher": {"id": "byName", "options": name},
+            "properties": [{"id": k.replace("_", "."), "value": v} for k, v in props.items()]}
+
+
+def dashboard(uid, title, layout: Layout, links, variables=(), refresh="30s", time_from="now-24h"):
+    return {
+        "uid": uid, "title": title, "tags": ["netmonx"], "timezone": "browser",
+        "schemaVersion": 39, "version": 1, "editable": False, "graphTooltip": 1,
+        "refresh": refresh, "time": {"from": time_from, "to": "now"},
+        "templating": {"list": list(variables)}, "links": links, "panels": layout.panels,
+        "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+                                  "enable": True, "hide": True, "name": "Annotations & Alerts", "type": "dashboard"}]},
+    }
+
+
+def query_var(name, label, query, multi=False, include_all=False):
+    return {
+        "name": name, "label": label, "type": "query", "datasource": DS,
+        "query": {"query": query, "refId": "v"}, "definition": query, "refresh": 2,
+        "multi": multi, "includeAll": include_all, "sort": 1, "current": {},
+    }
+
+
+UP_MAP = [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]
+LAN_RTT = (
+    "1000 * sum by (host) (rate(smokeping_response_duration_seconds_sum{{{sel}}}[$__rate_interval]))"
+    " / sum by (host) (rate(smokeping_response_duration_seconds_count{{{sel}}}[$__rate_interval]))"
+)
+LAN_LOSS = (
+    "1 - sum by (host) (rate(smokeping_response_duration_seconds_count{{{sel}}}[$__rate_interval]))"
+    " / sum by (host) (rate(smokeping_requests_total{{{sel}}}[$__rate_interval]))"
+)
+CPU_BUSY = (
+    "1 - sum by (node) (rate(asus_router_cpu_seconds_total{{mode=\"idle\"{sel}}}[$__rate_interval]))"
+    " / sum by (node) (rate(asus_router_cpu_seconds_total{{{sel0}}}[$__rate_interval]))"
+)
+
+
+# --- dashboards -----------------------------------------------------------
+
+
+def overview(links) -> dict:
+    L = Layout()
+    L.add(stat("Internet", "min(asus_wan_up)", mappings=UP_MAP,
+               steps=thresholds((None, "red"), (1, "green")), color_mode="background",
+               description="WAN state reported by the router."), 4, 4)
+    L.add(stat("Latency (router → internet)", 'avg(asus_ping_rtt_avg_ms{role="internet"})', "ms", decimals=1,
+               steps=thresholds((None, "green"), (40, "yellow"), (100, "red")), graph=True,
+               description="Average of the router's pings to the internet targets. No home Wi-Fi in the path."), 4, 4)
+    L.add(stat("Packet loss (15m)", 'avg(avg_over_time(asus_ping_loss_ratio{role="internet"}[15m]))', "percentunit",
+               decimals=2, steps=thresholds((None, "green"), (0.005, "yellow"), (0.02, "red")), graph=True), 4, 4)
+    L.add(stat("Jitter", 'avg(asus_ping_jitter_ms{role="internet"})', "ms", decimals=1,
+               steps=thresholds((None, "green"), (10, "yellow"), (30, "red")), graph=True), 4, 4)
+    L.add(stat("Last download", f"max(last_over_time({SPEED('download_bits')}[1d]))", "bps", decimals=0,
+               description="From Speedtest Tracker."), 4, 4)
+    L.add(stat("Last upload", f"max(last_over_time({SPEED('upload_bits')}[1d]))", "bps", decimals=0), 4, 4)
+
+    L.add(stat("Devices online", "sum(asus_clients)",
+               description="Every device on the mesh, wired or Wi-Fi, from the main router's AiMesh client list."), 4, 4)
+    L.add(stat("Wi-Fi devices", 'sum(asus_clients{connection="wifi"}) or vector(0)',
+               description="Devices on Wi-Fi, on any node and any SSID (main, guest, IoT)."), 4, 4)
+    L.add(stat("Mesh nodes up", "sum(asus_up)", description="Nodes the collector can reach over SSH.",
+               legend="", steps=thresholds((None, "orange"))), 4, 4)
+    L.add(stat("Router uptime", 'max(asus_router_uptime_seconds * on(node) group_left group by (node) (asus_router_info{role="primary"}))',
+               "s", decimals=0), 4, 4)
+    L.add(stat("WAN IP", "asus_wan_info", legend="{{ip}}", text_mode="name", steps=thresholds((None, "blue")),
+               color_mode="none"), 4, 4)
+    L.add(stat("Router CPU", "(" + CPU_BUSY.format(sel="", sel0="")
+               + ') * on(node) group_left group by (node) (asus_router_info{role="primary"})', "percentunit", decimals=0,
+               steps=thresholds((None, "green"), (0.7, "yellow"), (0.9, "red"))), 4, 4)
+
+    L.add(timeseries(
+        "Internet latency: router vs. LAN",
+        [target('asus_ping_rtt_avg_ms{role="internet"}', "router → {{target}}"),
+         target('asus_ping_rtt_avg_ms{role="isp_gateway"}', "router → ISP gateway", "B"),
+         target(LAN_RTT.format(sel=PUBLIC_HOSTS), "LAN → {{host}}", "C")],
+        "ms", min_=0, fill=0,
+        description="Router pings leave out your Wi-Fi and LAN. If the LAN lines spike but the router lines "
+                    "don't, the problem is inside your home network."), 16, 9)
+    L.add(timeseries("Packet loss",
+                     [target('asus_ping_loss_ratio{role!=""}', "router → {{target}}"),
+                      target(LAN_LOSS.format(sel=PUBLIC_HOSTS), "LAN → {{host}}", "B")],
+                     "percentunit", min_=0, fill=20), 8, 9)
+    L.add(timeseries(
+        "WAN throughput",
+        [target("sum(rate(asus_wan_receive_bytes_total[$__rate_interval])) * 8", "download"),
+         target("sum(rate(asus_wan_transmit_bytes_total[$__rate_interval])) * -8", "upload", "B")],
+        "bps", fill=25, description="Upload is drawn below zero."), 16, 8)
+    L.add(state_timeline("Internet connection",
+                         [target("min(asus_wan_up)", "WAN"),
+                          target("min(asus_up)", "router SSH", "B")]), 8, 8)
+    return dashboard("netmonx-overview", "Network Overview", L, links)
+
+
+def isp(links) -> dict:
+    L = Layout()
+    L.row("Latency")
+    L.add(heatmap("LAN latency distribution: $host",
+                  'sum by (le) (increase(smokeping_response_duration_seconds_bucket{host="$host"}[$__rate_interval]))',
+                  "SmokePing-style view. A tight band is good; smear or speckle above it means jitter."), 12, 10)
+    L.add(timeseries(
+        "Router ping range (min / avg / max)",
+        [target('asus_ping_rtt_min_ms{role!=""}', "min {{target}}"),
+         target('asus_ping_rtt_avg_ms{role!=""}', "avg {{target}}", "B"),
+         target('asus_ping_rtt_max_ms{role!=""}', "max {{target}}", "C")],
+        "ms", min_=0, fill=0), 12, 10)
+    L.add(timeseries("Jitter (router)", [target('asus_ping_jitter_ms{role!=""}', "{{target}}")], "ms", min_=0), 12, 8)
+    L.add(timeseries(
+        "Long-run loss rate (router)",
+        [target("1 - rate(asus_ping_packets_received_total[1h]) / rate(asus_ping_packets_sent_total[1h])",
+                "{{target}}")],
+        "percentunit", min_=0, description="Share of pings lost over the past hour, per target."), 12, 8)
+    L.row("Speed tests")
+    L.add(timeseries("Speed test results",
+                     [target(f"max({SPEED('download_bits')})", "download"),
+                      target(f"max({SPEED('upload_bits')})", "upload", "B")],
+                     "bps", min_=0, fill=0, legend_calcs=("lastNotNull", "mean", "min")), 16, 8)
+    L.add(timeseries("Speed test latency",
+                     [target(f"max({SPEED('ping_ms')})", "idle ping"),
+                      target(f"max({SPEED('download_latency_iqm_ms')})", "loaded: download (IQM)", "B"),
+                      target(f"max({SPEED('upload_latency_iqm_ms')})", "loaded: upload (IQM)", "C")],
+                     "ms", min_=0, fill=0,
+                     description="A big rise under load points to bufferbloat."), 8, 8)
+    L.row("Path & addressing")
+    L.add(table("Route to first ping target (latest traceroute)",
+                [target("asus_traceroute_hop_rtt_ms", ref="A", instant=True, table=True)],
+                organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
+                                            "node": True},
+                          "renameByName": {"hop": "Hop", "ip": "Address", "Value": "RTT (ms)"}},
+                sort=("Hop", False)), 8, 8)
+    L.add(table("WAN details",
+                [target("asus_wan_info", ref="A", instant=True, table=True),
+                 target("asus_isp_hop_info", ref="B", instant=True, table=True)],
+                organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
+                                            "Value #A": True, "Value #B": True, "node": True},
+                          "renameByName": {"ip": "WAN IP", "gateway": "Gateway", "dns": "ISP DNS",
+                                           "proto": "Type", "iface": "Interface"}}), 8, 8)
+    L.add(timeseries("WAN IP changes per day", [target("increase(asus_wan_ip_changes_total[1d])", "changes")],
+                     "none", min_=0), 8, 8)
+    L.row("DNS & websites")
+    L.add(timeseries("DNS lookup time", [target('probe_duration_seconds{job="dns"}', "{{resolver}}")], "s",
+                     min_=0, fill=0), 12, 8)
+    L.add(timeseries("Website response time",
+                     [target('probe_duration_seconds{job="http"}', "{{instance}}"),
+                      target('probe_success{job="http"} == 0', "{{instance}} FAILED", "B")],
+                     "s", min_=0, fill=0), 12, 8)
+    host = query_var("host", "LAN ping target", "label_values(smokeping_response_duration_seconds_count, host)")
+    return dashboard("netmonx-isp", "ISP & Internet", L, links, [host])
+
+
+def router(links) -> dict:
+    L = Layout()
+    sel = 'node=~"$node"'
+    L.add(table("Nodes", [target("asus_router_info", ref="A", instant=True, table=True),
+                          target("asus_router_uptime_seconds", ref="B", instant=True, table=True),
+                          target("asus_up", ref="C", instant=True, table=True)],
+                organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
+                                            "Value #A": True},
+                          "renameByName": {"node": "Node", "model": "Model", "firmware": "Firmware",
+                                           "mac": "MAC", "role": "Role", "Value #B": "Uptime",
+                                           "Value #C": "Reachable"}},
+                overrides=[override("Uptime", unit="s"),
+                           override("Reachable", mappings=UP_MAP,
+                                    custom_cellOptions={"type": "color-text"})]), 24, 6)
+    L.add(timeseries("CPU busy", [target(CPU_BUSY.format(sel=", " + sel, sel0=sel), "{{node}}")],
+                     "percentunit", min_=0, fill=0), 8, 8)
+    L.add(timeseries("Memory used",
+                     [target(f"1 - asus_router_memory_available_bytes{{{sel}}} / asus_router_memory_total_bytes{{{sel}}}",
+                             "{{node}}")], "percentunit", min_=0, fill=0), 8, 8)
+    L.add(timeseries("Temperature", [target(f"asus_router_temperature_celsius{{{sel}}}", "{{node}} {{sensor}}")],
+                     "celsius", fill=0,
+                     description="Radio sensors are raw driver values; some older chips report in a different "
+                                 "scale."), 8, 8)
+    L.add(timeseries("Load average (1m)", [target(f"asus_router_load1{{{sel}}}", "{{node}}")], "none",
+                     min_=0, fill=0), 8, 8)
+    L.add(timeseries("Tracked connections",
+                     [target(f"asus_router_conntrack_entries{{{sel}}}", "{{node}}"),
+                      target(f"asus_router_conntrack_max{{{sel}}}", "{{node}} limit", "B")], "none", min_=0, fill=0),
+          8, 8)
+    L.add(timeseries("Mesh node ping from LAN",
+                     [target(LAN_RTT.format(sel=PRIVATE_HOSTS), "{{host}}")], "ms", min_=0, fill=0,
+                     description="Smokeping pings to router and mesh node IPs."), 8, 8)
+    L.add(timeseries(
+        "Interface traffic",
+        [target(f'rate(asus_net_receive_bytes_total{{{sel}, iface=~"$iface"}}[$__rate_interval]) * 8',
+                "{{node}} {{iface}} in"),
+         target(f'rate(asus_net_transmit_bytes_total{{{sel}, iface=~"$iface"}}[$__rate_interval]) * -8',
+                "{{node}} {{iface}} out", "B")],
+        "bps", fill=5), 16, 9)
+    L.add(timeseries(
+        "Errors & drops",
+        [target(f"sum by (node, iface) (rate(asus_net_receive_errors_total{{{sel}}}[$__rate_interval]) + "
+                f"rate(asus_net_transmit_errors_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} errors"),
+         target(f"sum by (node, iface) (rate(asus_net_receive_drops_total{{{sel}}}[$__rate_interval]) + "
+                f"rate(asus_net_transmit_drops_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} drops",
+                "B")],
+        "pps", min_=0, fill=0), 8, 9)
+    node = query_var("node", "Node", "label_values(asus_up, node)", multi=True, include_all=True)
+    iface = query_var("iface", "Interface", 'label_values(asus_net_receive_bytes_total{node=~"$node"}, iface)',
+                      multi=True, include_all=True)
+    return dashboard("netmonx-router", "Router & Mesh", L, links, [node, iface])
+
+
+def clients(links, netalertx_url) -> dict:
+    L = Layout()
+    wired_or_wifi = "Counts come from the main router's AiMesh client list, so every node is included."
+    L.add(stat("Devices", "sum(asus_clients)", description=wired_or_wifi, graph=True), 4, 4)
+    L.add(stat("Wi-Fi", 'sum(asus_clients{connection="wifi"}) or vector(0)', graph=True,
+               description="Wi-Fi devices on every node and SSID."), 4, 4)
+    L.add(stat("Wired", 'sum(asus_clients{connection="wired"}) or vector(0)', graph=True,
+               description="Devices on an Ethernet port of the router or a mesh node."), 4, 4)
+    L.add(stat("Guest network", 'sum(asus_clients{ssid=~"(?i).*guest.*"}) or vector(0)',
+               description="Devices on an SSID with \"guest\" in its name."), 4, 4)
+    L.add(stat("Weak signal (< -70 dBm)", "count(asus_client_rssi_dbm < -70) or vector(0)",
+               steps=thresholds((None, "green"), (1, "yellow"), (5, "red"))), 4, 4)
+    L.add(stat("DHCP leases", "sum(asus_dhcp_leases)",
+               description="Leases include devices that left recently, so this is usually higher than Devices."), 4, 4)
+
+    L.add(bargauge("Devices by mesh node", 'sum by (node_name, connection) (asus_clients)',
+                   "{{node_name}} · {{connection}}"), 8, 9)
+    L.add(bargauge("Wi-Fi devices by band", 'sum by (band) (asus_clients{connection="wifi"})', "{{band}}"), 8, 9)
+    L.add(bargauge("Wi-Fi devices by SSID", 'sum by (ssid) (asus_clients{connection="wifi"})', "{{ssid}}"), 8, 9)
+
+    L.add(timeseries("Devices by mesh node", [target("sum by (node_name) (asus_clients)", "{{node_name}}")],
+                     "none", stack=True, min_=0, fill=40, legend_calcs=("lastNotNull", "max")), 12, 8)
+    L.add(timeseries("Wired vs. Wi-Fi", [target("sum by (connection) (asus_clients)", "{{connection}}")],
+                     "none", stack=True, min_=0, fill=40, legend_calcs=("lastNotNull", "max")), 12, 8)
+
+    inst = lambda expr, ref: target(expr, ref=ref, instant=True, table=True)  # noqa: E731
+    hide = {"Time": True, "__name__": True, "job": True, "instance": True}
+    names = {"hostname": "Name", "mac": "MAC", "ip": "IP", "node_name": "Mesh node", "connection": "Connection",
+             "band": "Band", "ssid": "SSID"}
+    signal = override("Signal", unit="dBm", custom_cellOptions={"type": "color-background"},
+                      thresholds=thresholds((None, "red"), (-75, "orange"), (-67, "yellow"), (-55, "green")),
+                      color={"mode": "thresholds"})
+    order = {"Name": 0, "IP": 1, "Mesh node": 2, "Connection": 3, "Band": 4, "SSID": 5, "Signal": 6, "MAC": 7}
+    L.row("All devices")
+    L.add(table(
+        "All devices",
+        [inst("asus_client_info", "A"),
+         inst("asus_client_rssi_dbm * on (mac) group_left (ip) asus_client_info", "B")],
+        organize={"excludeByName": {**hide, "node": True, "Value #A": True},
+                  "renameByName": {**names, "Value #B": "Signal"}, "indexByName": order},
+        overrides=[signal], sort=("Mesh node", False),
+        description="One row per device. Filter a column with the funnel icon in its header. " + wired_or_wifi),
+        24, 14)
+    L.add(table(
+        "Wired devices", [inst('asus_client_info{connection="wired"}', "A")],
+        organize={"excludeByName": {**hide, "node": True, "Value": True, "connection": True, "band": True,
+                                    "ssid": True},
+                  "renameByName": names},
+        sort=("Mesh node", False),
+        description="Devices behind a mesh node show under that node, not the main router."), 12, 10)
+    L.add(table("DHCP leases", [inst("asus_dhcp_lease_info", "A")],
+                organize={"excludeByName": {**hide, "Value": True, "node": True},
+                          "renameByName": {"hostname": "Name", "ip": "IP", "mac": "MAC"}},
+                sort=("IP", False)), 12, 10)
+
+    L.row("Wi-Fi link details (from each node's radios)")
+    L.add(table(
+        "Wi-Fi link details",
+        [inst("asus_wifi_client_rssi_dbm", "A"), inst("asus_wifi_client_tx_rate_mbps", "B"),
+         inst("asus_wifi_client_rx_rate_mbps", "C"), inst("asus_wifi_client_connected_seconds", "D"),
+         inst("rate(asus_wifi_client_transmit_bytes_total[10m]) * 8", "E")],
+        organize={"excludeByName": {**hide, "iface": True},
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "radio": "Radio",
+                                   "ssid": "SSID", "Value #A": "Signal", "Value #B": "Tx rate",
+                                   "Value #C": "Rx rate", "Value #D": "Connected",
+                                   "Value #E": "Download (10m avg)"}},
+        overrides=[signal, override("Tx rate", unit="Mbits"), override("Rx rate", unit="Mbits"),
+                   override("Connected", unit="s"), override("Download (10m avg)", unit="bps")],
+        sort=("Signal", False),
+        description="Link rate and traffic per Wi-Fi device, read with `wl` on each node that accepts SSH."),
+        24, 12)
+    L.add(timeseries("Signal strength", [target("asus_client_rssi_dbm", "{{hostname}} {{mac}}")],
+                     "dBm", fill=0, legend_calcs=("lastNotNull", "min")), 12, 10)
+    L.add(timeseries("Top Wi-Fi clients by traffic",
+                     [target("topk(10, rate(asus_wifi_client_transmit_bytes_total[$__rate_interval]) * 8)",
+                             "{{hostname}} {{mac}}")], "bps", min_=0, fill=0), 12, 10)
+    if netalertx_url:
+        note = (f"Full device inventory, new-device alerts and presence history are in "
+                f"**[NetAlertX]({netalertx_url})**.")
+    else:
+        note = ("NetAlertX (device inventory and new-device alerts) isn't running here. It needs host "
+                "networking for ARP scans, so it only runs on the Linux server.")
+    L.add(text("Device discovery", note + "\n\nNames come from the Asus app and DHCP. Name devices in the "
+               "Asus app to make this page easier to read."), 24, 3)
+    return dashboard("netmonx-clients", "Clients & Wi-Fi", L, links)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", type=Path, default=ROOT / "dashboards", help="output folder (default: dashboards/)")
+    out = ap.parse_args().out
+    env = read_env()
+    netalertx = env.get("NETALERTX_URL", "http://localhost:20211")  # empty: no NetAlertX link
+    speedtest = env.get("SPEEDTEST_APP_URL", "http://localhost:18765")
+    links = [{"title": "netmonX", "type": "dashboards", "tags": ["netmonx"], "asDropdown": False,
+              "includeVars": False, "keepTime": True}]
+    if netalertx:
+        links.append({"title": "NetAlertX", "type": "link", "url": netalertx, "targetBlank": True,
+                      "icon": "external link"})
+    if speedtest:
+        links.append({"title": "Speedtest Tracker", "type": "link", "url": speedtest, "targetBlank": True,
+                      "icon": "external link"})
+    out.mkdir(parents=True, exist_ok=True)
+    for name, dash in {"overview": overview(links), "isp": isp(links), "router": router(links),
+                       "clients": clients(links, netalertx)}.items():
+        (out / f"{name}.json").write_text(json.dumps(dash, indent=2) + "\n")
+        print(f"wrote {out / name}.json ({len(dash['panels'])} panels)")
+
+
+if __name__ == "__main__":
+    main()

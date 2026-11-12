@@ -1,0 +1,21 @@
+# Pinged once per second from the Docker host (LAN side).
+# Edit the router/mesh IPs to match your network. After the collector runs,
+# the ISP gateway it found shows up as asus_isp_hop_info; add it under "isp".
+targets:
+  - hosts:          # internet
+      - 1.1.1.1
+      - 8.8.8.8
+      - 9.9.9.9
+    interval: 1s
+    network: ip4
+    protocol: icmp
+  - hosts:          # main router and AiMesh nodes
+      - 192.168.50.1
+    interval: 1s
+    network: ip4
+    protocol: icmp
+  # - hosts:        # isp: first hop beyond your router
+  #     - 73.12.34.1
+  #   interval: 1s
+  #   network: ip4
+  #   protocol: icmp
