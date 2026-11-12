@@ -94,9 +94,10 @@ Effort: S = an evening, M = a weekend, L = bigger.
 
 ## P2: monitoring depth
 
-- [ ] **ISP report card / SLA** (M) [eero, Ookla, UniFi Internet health]: Prometheus recording rules for
+- [x] **ISP report card / SLA** (M) [eero, Ookla, UniFi Internet health]: Prometheus recording rules for
       monthly uptime %, outage count and total minutes, p95 latency, median speed vs. the plan speed
       (`ISP_PLAN_DOWN/UP` in .env). Add a printable "evidence for your ISP" dashboard.
+      Done: Done: *ISP report card* dashboard (`netmonx-isp-report`, any time range, default 30 days, printable) and 30-day recording rules in `config/prometheus/rules/isp.yml` (`netmonx:wan_uptime:ratio_30d`, `:wan_outages:30d`, `:wan_downtime_minutes:30d`, p95 latency, loss, median speeds, plan ratio) with promtool unit tests. Plan speed from `ISP_PLAN_DOWN`/`ISP_PLAN_UP` (Mbit/s) via the collector's `netmonx_isp_plan_bits`.
 - [x] **Outage annotations** (S): Grafana annotations for WAN down/up, node reboots and WAN IP changes.
       Done: Prometheus annotations on every dashboard: WAN down (red), node reboots (orange, from uptime resets), WAN IP changes (blue). Toggle them at the top of each dashboard.
 - [ ] **Bufferbloat grade** (M) [Waveform, Ookla loaded latency]: compare idle latency with the loaded latency

@@ -163,6 +163,9 @@ check() {
   if command -v shellcheck >/dev/null 2>&1; then
     shellcheck dev.sh scripts/*.sh dev/fake-router/wl dev/fake-router/nvram dev/fake-router/entrypoint.sh
   else echo "  (shellcheck not installed; skipped)"; fi
+  info "promtool"
+  if command -v promtool >/dev/null 2>&1; then promtool test rules config/prometheus/tests/*.yml >/dev/null
+  else echo "  (promtool not installed; skipped)"; fi
   info "actionlint"
   if command -v actionlint >/dev/null 2>&1; then actionlint
   else echo "  (actionlint not installed; skipped)"; fi

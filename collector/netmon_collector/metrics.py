@@ -189,3 +189,19 @@ class BuildInfoCollector(Collector):
         )
         family.add_metric([self.version], 1)
         yield family
+
+
+class IspPlanCollector(Collector):
+    """netmonx_isp_plan_bits{direction} from ISP_PLAN_DOWN/ISP_PLAN_UP (Mbit/s), for the ISP report card."""
+
+    def __init__(self, down_mbps: float = 0, up_mbps: float = 0) -> None:
+        self.plan = {"download": down_mbps, "upload": up_mbps}
+
+    def collect(self):
+        family = GaugeMetricFamily(
+            "netmonx_isp_plan_bits", "Speed you pay your ISP for, in bit/s (ISP_PLAN_DOWN/UP)", labels=["direction"]
+        )
+        for direction, mbps in self.plan.items():
+            if mbps > 0:
+                family.add_metric([direction], mbps * 1e6)
+        yield family

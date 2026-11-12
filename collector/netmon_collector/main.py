@@ -11,7 +11,7 @@ from prometheus_client.registry import CollectorRegistry
 
 from . import sd
 from .config import Config
-from .metrics import BuildInfoCollector, Store, StoreCollector, collector_version
+from .metrics import BuildInfoCollector, IspPlanCollector, Store, StoreCollector, collector_version
 from .poller import NodePoller, SharedState
 from .presence import ClientTracker, DevicesFile, OuiTable
 from .selfmetrics import SELF
@@ -58,6 +58,7 @@ async def run() -> None:
     registry = CollectorRegistry(auto_describe=True)
     registry.register(StoreCollector(store))
     registry.register(BuildInfoCollector())
+    registry.register(IspPlanCollector(cfg.isp_plan_down, cfg.isp_plan_up))
     SELF.register(registry)
     shared = SharedState(
         tracker=ClientTracker(cfg.state_dir, cfg.client_retention_days),

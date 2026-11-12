@@ -1,0 +1,34 @@
+# promtool test rules config/prometheus/tests/isp_test.yml   (./dev.sh check runs it when promtool is installed)
+rule_files:
+  - ../rules/isp.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # Up for an hour, a 10-minute outage, then up again.
+      - series: 'asus_wan_up{node="r", wan="wan0"}'
+        values: '1x59 0x9 1x50'
+      - series: 'asus_ping_rtt_avg_ms{node="r", role="internet", target="1.1.1.1"}'
+        values: '10x119'
+      - series: 'asus_ping_rtt_avg_ms{node="r", role="isp_gateway", target="10.0.0.1"}'
+        values: '99x119'
+      - series: 'speedtest_tracker_download_bits{instance="s"}'
+        values: '400000000x119'
+      - series: 'netmonx_isp_plan_bits{direction="download"}'
+        values: '500000000x119'
+    promql_expr_test:
+      - expr: netmonx:wan_outages:30d
+        eval_time: 119m
+        exp_samples: [{labels: 'netmonx:wan_outages:30d', value: 1}]
+      - expr: netmonx:wan_downtime_minutes:30d
+        eval_time: 119m
+        exp_samples: [{labels: 'netmonx:wan_downtime_minutes:30d', value: 10}]
+      - expr: netmonx:internet_rtt_ms:p95_30d
+        eval_time: 119m
+        exp_samples: [{labels: 'netmonx:internet_rtt_ms:p95_30d', value: 10}]
+      - expr: netmonx:speedtest_download:plan_ratio_30d
+        eval_time: 119m
+        exp_samples: [{labels: 'netmonx:speedtest_download:plan_ratio_30d', value: 0.8}]
+      - expr: netmonx:speedtest_upload:plan_ratio_30d
+        eval_time: 119m
+        exp_samples: []

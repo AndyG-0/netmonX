@@ -36,6 +36,12 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
       # The same checks as on a dev machine.
       - run: ./dev.sh check
+      # Prometheus config and recording-rule unit tests, with the same promtool as the compose image.
+      - name: promtool
+        run: |
+          img=$(sed -n 's|^ *image: \(prom/prometheus:.*\)$|\1|p' docker-compose.yml)
+          docker run --rm --entrypoint promtool -v "$PWD/config/prometheus:/p:ro" -w /p "$img" \
+            test rules tests/isp_test.yml
 
   image:
     name: image build, smoke test, scan

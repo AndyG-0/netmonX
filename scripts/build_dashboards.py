@@ -386,6 +386,74 @@ def isp(links) -> dict:
     return dashboard("netmonx-isp", "ISP & Internet", L, links, [host])
 
 
+def isp_report(links) -> dict:
+    """Printable ISP report card for any time range (default 30 days). Same maths as rules/isp.yml."""
+    L = Layout()
+    up = "(max(asus_wan_up))[$__range:1m]"
+    rtt = '(avg(asus_ping_rtt_avg_ms{role="internet"}))[$__range:1m]'
+    loss = '(avg(asus_ping_loss_ratio{role="internet"}))[$__range:1m]'
+    down, upl = SPEED("download_bits"), SPEED("upload_bits")
+    plan = 'max(netmonx_isp_plan_bits{{direction="{}"}})'
+
+    def tile(title, expr, unit="none", **kw):
+        panel = stat(title, expr, unit, **kw)
+        panel["targets"][0].update(instant=True, range=False)
+        return panel
+
+    pct = thresholds((None, "red"), (0.99, "orange"), (0.999, "green"))
+    L.add(tile("Uptime", f"avg_over_time({up})", "percentunit", decimals=3, steps=pct,
+               description="Share of minutes in the time range with a working WAN, as the router reports it. "
+                           "Minutes when netmonX itself was down are left out."), 4, 5)
+    L.add(tile("Outages", f"ceil(changes({up}) / 2)", decimals=0,
+               steps=thresholds((None, "green"), (1, "orange"), (5, "red"))), 4, 5)
+    L.add(tile("Total downtime", f"60 * (count_over_time({up}) - sum_over_time({up}))", "s",
+               steps=thresholds((None, "green"), (60, "orange"), (3600, "red"))), 4, 5)
+    L.add(tile("Latency p95", f"quantile_over_time(0.95, {rtt})", "ms", decimals=1,
+               steps=thresholds((None, "green"), (50, "orange"), (100, "red")),
+               description="95% of pings from the router to the internet targets were faster than this."), 4, 5)
+    L.add(tile("Packet loss", f"avg_over_time({loss})", "percentunit", decimals=2,
+               steps=thresholds((None, "green"), (0.005, "orange"), (0.02, "red"))), 4, 5)
+    L.add(tile("Speed tests", f"changes((max({SPEED('result_id')}))[$__range:1m])", decimals=0,
+               description="New Speedtest Tracker results in the time range."), 4, 5)
+    vs = thresholds((None, "red"), (0.6, "orange"), (0.8, "green"))
+    L.add(tile("Median download", f"quantile_over_time(0.5, (max({down}))[$__range:5m])", "bps", decimals=0), 6, 5)
+    L.add(tile("Download vs. plan", f"quantile_over_time(0.5, (max({down}))[$__range:5m]) / on() {plan.format('download')}",
+               "percentunit", decimals=0, steps=vs,
+               description="Median download over the plan speed (ISP_PLAN_DOWN in .env). Empty until it is set."), 6, 5)
+    L.add(tile("Median upload", f"quantile_over_time(0.5, (max({upl}))[$__range:5m])", "bps", decimals=0), 6, 5)
+    L.add(tile("Upload vs. plan", f"quantile_over_time(0.5, (max({upl}))[$__range:5m]) / on() {plan.format('upload')}",
+               "percentunit", decimals=0, steps=vs,
+               description="Median upload over the plan speed (ISP_PLAN_UP in .env). Empty until it is set."), 6, 5)
+
+    L.add(state_timeline("Internet connection", [target("max(asus_wan_up)", "WAN")]), 24, 4)
+    daily = timeseries("Uptime per day", [target("avg_over_time((max(asus_wan_up))[1d:1m])", "uptime")],
+                       "percentunit", min_=0, fill=30, legend_calcs=("min", "mean"))
+    daily["interval"] = "1d"
+    daily["fieldConfig"]["defaults"]["custom"]["drawStyle"] = "bars"
+    L.add(daily, 12, 8)
+    L.add(timeseries("Speed tests vs. plan",
+                     [target(f"max({down})", "download"), target(f"max({upl})", "upload", "B"),
+                      target(plan.format("download"), "plan download", "C"),
+                      target(plan.format("upload"), "plan upload", "D")],
+                     "bps", min_=0, fill=0, legend_calcs=("min", "mean", "max")), 12, 8)
+    L.add(timeseries("Internet latency (router pings)",
+                     [target('avg(asus_ping_rtt_avg_ms{role="internet"})', "average"),
+                      target('max(asus_ping_rtt_max_ms{role="internet"})', "worst ping", "B")],
+                     "ms", min_=0, fill=0, legend_calcs=("mean", "max")), 12, 8)
+    L.add(timeseries("Packet loss (router pings)",
+                     [target('avg(asus_ping_loss_ratio{role="internet"})', "loss")],
+                     "percentunit", min_=0, legend_calcs=("mean", "max")), 12, 8)
+    L.add(text("How this is measured", (
+        "Pick the time range at the top (default: last 30 days), then print or export with "
+        "**Share → Export → PDF** (or the browser's print). Uptime and outages come from the router's own WAN "
+        "status, read every 15 seconds. Latency and loss are pings sent from the router to the internet targets "
+        "(`ROUTER_PING_TARGETS`), so Wi-Fi can't skew them. Speeds are Speedtest Tracker results. "
+        "Set `ISP_PLAN_DOWN` and `ISP_PLAN_UP` (Mbit/s) in .env to compare with what you pay for. "
+        "The same 30-day numbers are kept as Prometheus recording rules (`netmonx:*`, see "
+        "config/prometheus/rules/isp.yml) for alerts and scripts.")), 24, 4)
+    return dashboard("netmonx-isp-report", "ISP report card", L, links, refresh="", time_from="now-30d")
+
+
 def router(links) -> dict:
     L = Layout()
     sel = 'node=~"$node"'
@@ -875,7 +943,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     for name, dash in {"overview": overview(links), "isp": isp(links), "router": router(links),
                        "clients": clients(links, netalertx), "status": status(links),
-                       "device": device(links)}.items():
+                       "device": device(links), "isp-report": isp_report(links)}.items():
         (out / f"{name}.json").write_text(json.dumps(dash, indent=2) + "\n")
         print(f"wrote {out / name}.json ({len(dash['panels'])} panels)")
 

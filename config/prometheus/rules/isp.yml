@@ -1,0 +1,43 @@
+# ISP report card: recording rules behind the "ISP report card" dashboard.
+# Rolling 30-day figures, so they read the same in Grafana, alerts or a script.
+# Downtime counts minutes where the router said no WAN was up; time when the
+# collector itself was down is left out (not counted as up or down).
+groups:
+  # One sample a minute of the raw signals, so the 30-day rules below stay cheap.
+  - name: isp_base
+    interval: 1m
+    rules:
+      - record: netmonx:wan_up
+        expr: max(asus_wan_up)  # any WAN up (dual-WAN: either one)
+      - record: netmonx:internet_rtt_ms
+        expr: avg(asus_ping_rtt_avg_ms{role="internet"})
+      - record: netmonx:internet_loss_ratio
+        expr: avg(asus_ping_loss_ratio{role="internet"})
+      - record: netmonx:speedtest_download_bits
+        expr: max(speedtest_tracker_download_bits)
+      - record: netmonx:speedtest_upload_bits
+        expr: max(speedtest_tracker_upload_bits)
+
+  - name: isp_report
+    interval: 5m
+    rules:
+      - record: netmonx:wan_uptime:ratio_30d
+        expr: avg_over_time(netmonx:wan_up[30d])
+      - record: netmonx:wan_downtime_minutes:30d
+        expr: count_over_time(netmonx:wan_up[30d]) - sum_over_time(netmonx:wan_up[30d])
+      - record: netmonx:wan_outages:30d
+        # Each outage is two changes (down, then up); one still going counts too.
+        expr: ceil(changes(netmonx:wan_up[30d]) / 2)
+      - record: netmonx:internet_rtt_ms:p95_30d
+        expr: quantile_over_time(0.95, netmonx:internet_rtt_ms[30d])
+      - record: netmonx:internet_loss_ratio:avg_30d
+        expr: avg_over_time(netmonx:internet_loss_ratio[30d])
+      - record: netmonx:speedtest_download_bits:median_30d
+        expr: quantile_over_time(0.5, netmonx:speedtest_download_bits[30d])
+      - record: netmonx:speedtest_upload_bits:median_30d
+        expr: quantile_over_time(0.5, netmonx:speedtest_upload_bits[30d])
+      # Share of the plan speed (ISP_PLAN_DOWN / ISP_PLAN_UP in .env); empty while those aren't set.
+      - record: netmonx:speedtest_download:plan_ratio_30d
+        expr: netmonx:speedtest_download_bits:median_30d / on () max(netmonx_isp_plan_bits{direction="download"})
+      - record: netmonx:speedtest_upload:plan_ratio_30d
+        expr: netmonx:speedtest_upload_bits:median_30d / on () max(netmonx_isp_plan_bits{direction="upload"})

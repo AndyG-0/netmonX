@@ -20,6 +20,15 @@ def _bool(name: str, default: bool) -> bool:
     return default if not raw else raw.lower() in ("1", "true", "yes", "on")
 
 
+def _mbps(name: str) -> float:
+    """A speed in Mbit/s; empty or unreadable means 0 (not set)."""
+    try:
+        return max(0.0, float(_env(name, "0") or 0))
+    except ValueError:
+        log.warning("%s should be a number of Mbit/s; ignoring %r", name, _env(name))
+        return 0.0
+
+
 def _list(name: str, default: str = "") -> list[str]:
     return [p.strip() for p in _env(name, default).split(",") if p.strip()]
 
@@ -47,6 +56,8 @@ class Config:
     ping6_targets: list[str] = field(default_factory=list)  # used only if the router has IPv6 on
     lan_client_ping: bool = False  # list online clients at /sd/clients for blackbox pings
     lan_client_ping_max: int = 50
+    isp_plan_down: float = 0  # Mbit/s you pay for; 0 = not set
+    isp_plan_up: float = 0
 
     @classmethod
     def from_env(cls) -> Config:
@@ -99,4 +110,6 @@ class Config:
             client_retention_days=float(_env("CLIENT_RETENTION_DAYS", "30")),
             lan_client_ping=_bool("LAN_CLIENT_PING", False),
             lan_client_ping_max=int(_env("LAN_CLIENT_PING_MAX", "50")),
+            isp_plan_down=_mbps("ISP_PLAN_DOWN"),
+            isp_plan_up=_mbps("ISP_PLAN_UP"),
         )

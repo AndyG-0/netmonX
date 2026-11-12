@@ -68,3 +68,18 @@ def test_unparsed_sections():
         "meminfo",
         "uptime",
     ]
+
+
+def test_isp_plan_metric(monkeypatch):
+    from netmon_collector.config import Config
+    from netmon_collector.metrics import IspPlanCollector
+
+    monkeypatch.setenv("ROUTER_HOST", "192.0.2.1")
+    monkeypatch.setenv("ISP_PLAN_DOWN", "500")
+    monkeypatch.setenv("ISP_PLAN_UP", "fast")
+    cfg = Config.from_env()
+    assert (cfg.isp_plan_down, cfg.isp_plan_up) == (500, 0)
+    registry = CollectorRegistry()
+    registry.register(IspPlanCollector(cfg.isp_plan_down, cfg.isp_plan_up))
+    text = generate_latest(registry).decode()
+    assert 'netmonx_isp_plan_bits{direction="download"} 5e+08' in text and "upload" not in text

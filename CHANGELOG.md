@@ -38,6 +38,7 @@ under the new version when you cut a release.
 - Sticky and misplaced (2.4 GHz but 5 GHz capable) client tables.
 - Device dashboard: one device's signal, link rate, traffic, attachment history and lease; open it from a MAC on Clients.
 - Topology Node Graph on Router & Mesh: router, mesh nodes and the devices on each.
+- ISP report card dashboard and 30-day recording rules; ISP_PLAN_DOWN/UP compare speed tests with your plan.
 
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.

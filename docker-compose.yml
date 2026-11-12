@@ -32,6 +32,9 @@ services:
       # Ping every online LAN client from Prometheus (blackbox ICMP, once a minute). Off by default.
       LAN_CLIENT_PING: ${LAN_CLIENT_PING:-false}
       LAN_CLIENT_PING_MAX: ${LAN_CLIENT_PING_MAX:-50}
+      # Plan speed in Mbit/s, for the ISP report card (empty: not shown).
+      ISP_PLAN_DOWN: ${ISP_PLAN_DOWN:-}
+      ISP_PLAN_UP: ${ISP_PLAN_UP:-}
     # Run as the host user that owns secrets/router_key, so the key can stay chmod 600.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:
@@ -84,6 +87,7 @@ services:
       - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-365d}
     volumes:
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
 
   grafana:

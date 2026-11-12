@@ -101,7 +101,7 @@ docker compose up -d
 
 The collector image comes from `ghcr.io/andyg-0/netmonx-collector` (amd64 and arm64). Nothing is built on the server.
 
-- Grafana: `http://<host>:3000`. The *Overview* dashboard is the home page. *ISP*, *Router & mesh* and *Clients* are in the netmonX folder. *Device* shows one device (signal, link rate, traffic, where it was attached, DHCP lease); click a MAC on *Clients* to open it. *Status* is a compact page for a wall display: open `http://<host>:3000/d/netmonx-status?kiosk`. To show it without logging in, set `GRAFANA_ANONYMOUS=true` in `.env` (anyone who can reach Grafana can then view, not edit).
+- Grafana: `http://<host>:3000`. The *Overview* dashboard is the home page. *ISP*, *Router & mesh* and *Clients* are in the netmonX folder. *Device* shows one device (signal, link rate, traffic, where it was attached, DHCP lease); click a MAC on *Clients* to open it. *ISP report card* is a printable summary for any time range (uptime, outages, p95 latency, loss, median speed vs. `ISP_PLAN_DOWN`/`ISP_PLAN_UP`), handy as evidence when you call your ISP. *Status* is a compact page for a wall display: open `http://<host>:3000/d/netmonx-status?kiosk`. To show it without logging in, set `GRAFANA_ANONYMOUS=true` in `.env` (anyone who can reach Grafana can then view, not edit).
 - Prometheus targets: `http://<host>:9090/targets`. Every target should be UP. Speedtest stays down until you do step 5.
 
 ### 5. Turn on Speedtest Tracker's metrics
