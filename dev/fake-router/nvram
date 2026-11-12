@@ -16,6 +16,9 @@ case "$2" in
   webs_state_flag) echo 0 ;;
   wans_dualwan) echo "wan none" ;;
   ipv6_service) echo disabled ;;
+  sshd_enable) echo 2 ;;
+  misc_http_x|wps_enable|vts_enable_x|wgs_enable|vpn_server1_state|vpn_server2_state) echo 0 ;;
+  upnp_enable) echo 1 ;;
   lan_hwaddr) echo 02:00:00:aa:bb:01 ;;
   wan0_ifname) echo "$ifc" ;;
   wan0_proto) echo dhcp ;;

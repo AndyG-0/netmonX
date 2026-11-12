@@ -118,6 +118,7 @@ def test_commands_are_read_only():
         commands.slow_snapshot().text,
         commands.wifi_snapshot(["eth4", "eth5"], ["wl0.1"]).text,
         commands.clients_snapshot().text,
+        commands.security_snapshot().text,
         commands.ping("1.1.1.1").text,
         commands.traceroute("1.1.1.1").text,
         commands.ping("2606:4700:4700::1111").text,
@@ -199,3 +200,24 @@ def test_radio_sections():
     assert snap.radios["eth5"].noise_dbm is None and snap.radios["eth6"].chanim == {}
     assert parsers.parse_chanspec("wl: Unsupported") is None
     assert parsers.parse_chanim_stats("chanspec tx idle\n0x1003 5") == {}
+
+
+def test_security_parsers():
+    rules = parsers.parse_vts_rulelist("<NAS>8443>192.168.50.20>443>TCP><junk><Game>27015:27030>192.168.50.60>>BOTH>")
+    assert [(r.name, r.ext_port, r.ip, r.int_port, r.proto) for r in rules] == [
+        ("NAS", "8443", "192.168.50.20", "443", "TCP"),
+        ("Game", "27015:27030", "192.168.50.60", "27015:27030", "BOTH"),
+    ]
+    sec = parsers.section_map(fixture("security_snapshot.txt"))
+    maps = parsers.parse_upnp_leases(sec["upnp"])
+    assert [(m.proto, m.ext_port, m.ip, m.desc) for m in maps] == [
+        ("UDP", "3074", "192.168.50.60", "Xbox"),
+        ("TCP", "32400", "192.168.50.20", "Plex Media Server"),
+    ]
+    (c,) = parsers.parse_openvpn_status(sec["openvpn 1"])
+    assert (c.name, c.real_address, c.virtual_address, c.rx_bytes, c.tx_bytes, c.since) == (
+        "laptop", "203.0.113.7", "10.8.0.2", 123456, 654321, 1794457200,
+    )  # fmt: skip
+    assert parsers.parse_openvpn_status(sec["openvpn 2"]) == []
+    peers = parsers.parse_wg(sec["wg_handshakes"], sec["wg_transfer"])
+    assert [(p.iface, p.handshake, p.rx_bytes) for p in peers] == [("wgs1", 1794460190, 1000), ("wgs1", 0, 0)]

@@ -1,0 +1,19 @@
+@@upnp
+UDP:3074:192.168.50.60:3074:1794460000:Xbox
+TCP:32400:192.168.50.20:32400:Plex Media Server
+@@openvpn 1
+TITLE,OpenVPN 2.6.12 arm-unknown-linux-gnu
+TIME,2026-11-11 21:50:00,1794460200
+HEADER,CLIENT_LIST,Common Name,Real Address,Virtual Address,Virtual IPv6 Address,Bytes Received,Bytes Sent,Connected Since,Connected Since (time_t),Username,Client ID,Peer ID
+CLIENT_LIST,laptop,203.0.113.7:51234,10.8.0.2,,123456,654321,2026-11-11 21:00:00,1794457200,UNDEF,0,0
+HEADER,ROUTING_TABLE,Virtual Address,Common Name,Real Address,Last Ref,Last Ref (time_t)
+ROUTING_TABLE,10.8.0.2,laptop,203.0.113.7:51234,2026-11-11 21:49:59,1794460199
+GLOBAL_STATS,Max bcast/mcast queue length,0
+END
+@@openvpn 2
+@@wg_handshakes
+wgs1	AAAAexamplePublicKeyOne000000000000000000000=	1794460190
+wgs1	BBBBexamplePublicKeyTwo000000000000000000000=	0
+@@wg_transfer
+wgs1	AAAAexamplePublicKeyOne000000000000000000000=	1000	2000
+wgs1	BBBBexamplePublicKeyTwo000000000000000000000=	0	0

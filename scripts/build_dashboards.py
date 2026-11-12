@@ -421,6 +421,50 @@ def router(links) -> dict:
         description="Primary channel per radio over time; a change is a DFS move, auto channel or a manual change.",
         up_down=False),
         24, 7)
+    L.row("Security & VPN")
+    onoff = [{"type": "value", "options": {"0": {"text": "off", "color": "green"},
+                                           "1": {"text": "ON", "color": "orange"}}}]
+    L.add(table(
+        "Exposure",
+        [rinst("max by (setting) (asus_exposure_enabled)", "A")],
+        organize={"excludeByName": {"Time": True},
+                  "renameByName": {"setting": "Setting", "Value": "State"}},
+        overrides=[override("State", mappings=onoff, custom_cellOptions={"type": "color-text"})],
+        sort=("State", True),
+        description="Settings that open the router or LAN to the outside, read from nvram. `ssh_wan` and "
+                    "`webui_wan` (router admin reachable from the internet) should stay off. UPnP lets any "
+                    "device open ports; WPS push-button/PIN pairing is a known weak spot."),
+        8, 8)
+    L.add(table(
+        "Open ports",
+        [rinst("asus_port_forward_info", "A"), rinst("asus_upnp_mapping_info", "B")],
+        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "node": True,
+                                    "Value #A": True, "Value #B": True},
+                  "renameByName": {"rule": "Port forward", "desc": "UPnP (device says)", "ext_port": "WAN port",
+                                   "ip": "LAN device", "int_port": "LAN port", "proto": "Protocol"}},
+        description="Port forwarding rules (set by you in the web UI) and UPnP mappings (opened by devices on "
+                    "their own). Each is a way in from the internet."),
+        16, 8)
+    L.add(table(
+        "VPN clients",
+        [rinst("time() - asus_vpn_client_connected_since_timestamp_seconds", "A"),
+         rinst("asus_vpn_client_receive_bytes_total", "B"), rinst("asus_vpn_client_transmit_bytes_total", "C")],
+        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "node": True},
+                  "renameByName": {"server": "Server", "client": "Client", "real_address": "From",
+                                   "virtual_address": "VPN address", "Value #A": "Connected for",
+                                   "Value #B": "Received", "Value #C": "Sent"}},
+        overrides=[override("Connected for", unit="s"), override("Received", unit="bytes"),
+                   override("Sent", unit="bytes")],
+        description="Connected OpenVPN clients from the server status file. WireGuard peers only show traffic: "
+                    "see the chart for their last handshake."),
+        16, 8)
+    L.add(timeseries(
+        "VPN clients connected",
+        [target("sum by (server) (asus_vpn_clients)", "{{server}}"),
+         target("max by (peer) (time() - asus_wireguard_peer_last_handshake_timestamp_seconds)",
+                "WireGuard {{peer}}: s since handshake", "B")],
+        "none", min_=0, fill=0,
+        description="WireGuard counts a peer as connected while it handshook in the last 3 minutes."), 8, 8)
     L.row("Collector")
     L.add(timeseries(
         "SSH command time (p95)",

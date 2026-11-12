@@ -27,6 +27,8 @@ under the new version when you cut a release.
 - Firmware update check: `asus_firmware_update_available`, a Nodes table column and an alert.
 - Dual WAN: per-WAN state and addressing, failover alert.
 - IPv6: settings info and `ping6` from the router when IPv6 is on (`ROUTER_PING6_TARGETS`).
+- Security exposure: WAN admin access, UPnP, WPS, port forwards and UPnP mappings, with alerts and a Security & VPN dashboard row.
+- VPN clients per server (OpenVPN status file, WireGuard handshakes).
 
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.

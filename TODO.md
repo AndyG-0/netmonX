@@ -67,11 +67,13 @@ Effort: S = an evening, M = a weekend, L = bigger.
       Done: `asus_ipv6_info`, `asus_ipv6_enabled`; `ping6` to `ROUTER_PING6_TARGETS` (role `internet_v6`) only when IPv6 is on. Your router has IPv6 disabled, so the ping6 path is unverified.
 - [ ] **Config drift detection** (S) [Oxidized/RANCID]: hash `nvram show` with counters and timestamps left
       out, export `asus_config_hash_info`, and alert when it changes. Builds on the README's md5sum tip.
-- [ ] **Security exposure view** (M) [Firewalla, UniFi threat panel]: list port forwards (`vts_rulelist`),
+- [x] **Security exposure view** (M) [Firewalla, UniFi threat panel]: list port forwards (`vts_rulelist`),
       UPnP mappings (`/tmp/upnp.leases` or similar), WAN SSH/web access flags (`sshd_wan`, `misc_http_x`),
       and whether WPS is on. Alert if any of these become active.
-- [ ] **VPN server sessions** (S): connected WireGuard/OpenVPN clients via `wg show` / OpenVPN status files,
+      Done: `asus_exposure_enabled{setting}` (SSH/web UI from WAN, UPnP, WPS, port forwarding, VPN servers), `asus_port_forward_info` / `asus_upnp_mapping_info`, alerts for WAN admin access and changed open ports, "Security & VPN" row on the Router dashboard. The `vts_rulelist` format is from Asuswrt source, not verified here (no rules configured).
+- [x] **VPN server sessions** (S): connected WireGuard/OpenVPN clients via `wg show` / OpenVPN status files,
       where present.
+      Done: OpenVPN clients from `/etc/openvpn/serverN/status` (name, from, VPN address, bytes, connected since; verified on the real router) and WireGuard peers from `wg show all latest-handshakes|transfer` (public keys only, shortened to 8 chars; untested: WireGuard server is off here).
 
 ### Alerts (add to config/grafana/provisioning/alerting/rules.yml)
 - [x] Node rebooted (uptime went down) (S)

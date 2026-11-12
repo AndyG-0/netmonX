@@ -600,3 +600,115 @@ def parse_custom_clientlist(value: str) -> dict[str, str]:
         if len(fields) > 1 and _MAC_RE.match(fields[1].strip()) and fields[0].strip():
             names[fields[1].strip().upper()] = fields[0].strip()
     return names
+
+
+# --- security exposure and VPN -------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PortForward:
+    name: str
+    ext_port: str
+    ip: str
+    int_port: str
+    proto: str
+
+
+def parse_vts_rulelist(value: str) -> list[PortForward]:
+    """`vts_rulelist`: `<name>ext_port>ip>int_port>proto>...` per rule (later fields, e.g. source IP, ignored)."""
+    out = []
+    for rule in value.split("<"):
+        f = rule.split(">")
+        if len(f) >= 5 and f[1] and f[2]:
+            out.append(PortForward(f[0], f[1], f[2], f[3] or f[1], f[4].upper()))
+    return out
+
+
+@dataclass(frozen=True)
+class UpnpMapping:
+    proto: str
+    ext_port: str
+    ip: str
+    int_port: str
+    desc: str
+
+
+def parse_upnp_leases(text: str) -> list[UpnpMapping]:
+    """miniupnpd lease file: `PROTO:EXT:IP:INT:TIMESTAMP:DESC` (or without TIMESTAMP on older builds)."""
+    out = []
+    for line in text.splitlines():
+        f = line.strip().split(":", 5)
+        if len(f) < 4 or not f[1].isdigit():
+            continue
+        desc = ""
+        if len(f) == 6:
+            desc = f[5] if f[4].isdigit() else f"{f[4]}:{f[5]}"
+        elif len(f) == 5:
+            desc = "" if f[4].isdigit() else f[4]
+        out.append(UpnpMapping(f[0].upper(), f[1], f[2], f[3], desc))
+    return out
+
+
+@dataclass(frozen=True)
+class VpnClient:
+    name: str
+    real_address: str
+    virtual_address: str
+    rx_bytes: int | None
+    tx_bytes: int | None
+    since: int | None
+
+
+def _to_int(v: str | None) -> int | None:
+    try:
+        return int(v) if v not in (None, "") else None
+    except ValueError:
+        return None
+
+
+def parse_openvpn_status(text: str) -> list[VpnClient]:
+    """OpenVPN `--status-version 2` (commas) or 3 (tabs): columns come from the HEADER,CLIENT_LIST row."""
+    cols: list[str] = []
+    out = []
+    for line in text.splitlines():
+        f = line.rstrip("\r").split("\t" if "\t" in line else ",")
+        if f[:2] == ["HEADER", "CLIENT_LIST"]:
+            cols = f[2:]
+        elif f[0] == "CLIENT_LIST" and cols:
+            row = dict(zip(cols, f[1:], strict=False))
+            real = row.get("Real Address", "")
+            out.append(
+                VpnClient(
+                    name=row.get("Common Name", ""),
+                    real_address=real.rsplit(":", 1)[0] if real.count(":") == 1 else real,  # drop the port
+                    virtual_address=row.get("Virtual Address", ""),
+                    rx_bytes=_to_int(row.get("Bytes Received")),
+                    tx_bytes=_to_int(row.get("Bytes Sent")),
+                    since=_to_int(row.get("Connected Since (time_t)")),
+                )
+            )
+    return out
+
+
+@dataclass
+class WgPeer:
+    iface: str
+    peer: str  # public key
+    handshake: int = 0  # unix time, 0 = never
+    rx_bytes: int | None = None
+    tx_bytes: int | None = None
+
+
+def parse_wg(handshakes: str, transfer: str) -> list[WgPeer]:
+    """`wg show all latest-handshakes` (iface key ts) and `wg show all transfer` (iface key rx tx)."""
+    peers: dict[tuple[str, str], WgPeer] = {}
+    for line in handshakes.splitlines():
+        f = line.split()
+        if len(f) == 3 and f[2].isdigit():
+            peers[(f[0], f[1])] = WgPeer(f[0], f[1], int(f[2]))
+    for line in transfer.splitlines():
+        f = line.split()
+        if len(f) == 4 and f[2].isdigit() and f[3].isdigit():
+            p = peers.setdefault((f[0], f[1]), WgPeer(f[0], f[1]))
+            p.rx_bytes, p.tx_bytes = int(f[2]), int(f[3])
+    return list(peers.values())

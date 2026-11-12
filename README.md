@@ -113,7 +113,7 @@ Speedtest Tracker serves its Prometheus metrics only after you enable them:
 
 ### 6. Alerts (optional)
 
-Grafana loads 17 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
+Grafana loads 19 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
 
 | Alert | Fires when |
 |---|---|
@@ -133,6 +133,8 @@ Grafana loads 17 alert rules from `config/grafana/provisioning/alerting/rules.ym
 | Collector data stale | no finished poll for 5 minutes, or no data at all |
 | New device on the network | the collector sees a MAC for the first time (severity `info`) |
 | Firmware update available | the router's own update check found newer firmware (severity `info`) |
+| Router admin open to the internet | `sshd_enable` allows WAN or `misc_http_x` (web UI from WAN) is on (severity `critical`) |
+| Port forwards or UPnP mappings changed | the number of port forwards or UPnP mappings changed (severity `info`) |
 | Known device offline | a device with `alert_offline_hours` in `devices.yml` has been gone that long |
 
 To get notified:

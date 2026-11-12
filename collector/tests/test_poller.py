@@ -26,6 +26,7 @@ class FakeConn:
             "slow_snapshot": "slow_snapshot.txt",
             "wifi_snapshot": "wifi_snapshot.txt",
             "clients_snapshot": "clientlist.json",
+            "security_snapshot": "security_snapshot.txt",
             "ping": "ping_busybox.txt",
             "traceroute": "traceroute.txt",
         }[command.name]
@@ -60,7 +61,7 @@ def test_full_cycle_primary():
     poller, store, shared = make(conn)
 
     async def cycle():
-        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients"])
+        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
 
@@ -135,9 +136,9 @@ def test_mesh_node_skips_wan_and_ping():
 def test_failure_drops_values_and_marks_down():
     conn = FakeConn()
     poller, store, _ = make(conn)
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security"]))
     conn.fail = True
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security"]))
     text = render(store)
     assert 'asus_up{node="192.168.50.1"} 0.0' in text
     assert 'asus_poll_errors_total{loop="slow",node="192.168.50.1"} 1.0' in text
@@ -225,3 +226,30 @@ def test_ping6_command():
 
     assert commands.ping("2606:4700:4700::1111", 3).text.startswith("ping6 -c 3")
     assert commands.ping("1.1.1.1", 3).text.startswith("ping -c 3")
+
+
+def test_security_samples():
+    from netmon_collector import poller as P
+
+    nv = dict(
+        line.split("=", 1) for line in (FIX / "slow_snapshot.txt").read_text().split("@@thermal")[0].splitlines()[1:]
+    )
+    out = [x for x in P.security_samples("r", nv, (FIX / "security_snapshot.txt").read_text(), 1794460200) if x]
+    got = {(x.name, tuple(sorted(dict(x.labels).items()))): x.value for x in out}
+    exposure = {dict(k[1])["setting"]: v for k, v in got.items() if k[0] == "asus_exposure_enabled"}
+    assert exposure == {
+        "ssh_wan": 0, "webui_wan": 0, "port_forwarding": 1, "upnp": 1, "wps": 1,
+        "openvpn_server1": 1, "openvpn_server2": 0, "wireguard_server": 1,
+    }  # fmt: skip
+    by_name = {}
+    for x in out:
+        by_name.setdefault(x.name, []).append((dict(x.labels), x.value))
+    assert by_name["asus_port_forwards"][0][1] == 2
+    assert {lab["int_port"] for lab, _ in by_name["asus_port_forward_info"]} == {"443", "27015:27030"}
+    assert [lab["desc"] for lab, _ in by_name["asus_upnp_mapping_info"]] == ["Xbox", "Plex Media Server"]
+    vpn = {lab["server"]: v for lab, v in by_name["asus_vpn_clients"]}
+    assert vpn == {"openvpn1": 1, "wireguard": 1}  # server 2 is off; one WireGuard peer is recent
+    (since,) = by_name["asus_vpn_client_connected_since_timestamp_seconds"]
+    assert since[0]["real_address"] == "203.0.113.7" and since[0]["client"] == "laptop" and since[1] == 1794457200
+    peers = {lab["peer"] for lab, _ in by_name["asus_wireguard_peer_last_handshake_timestamp_seconds"]}
+    assert peers == {"AAAAexam"}  # the peer that never connected has no handshake time

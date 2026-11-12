@@ -108,6 +108,91 @@ def ping_samples(node: str, target: str, role: str, result: parsers.PingResult) 
     ]
 
 
+# Settings that open the router or LAN to the outside, from nvram: (setting, key, values meaning "on").
+EXPOSURE_SETTINGS = (
+    ("ssh_wan", "sshd_enable", ("1",)),  # 1 = LAN and WAN, 2 = LAN only
+    ("webui_wan", "misc_http_x", ("1",)),
+    ("port_forwarding", "vts_enable_x", ("1",)),
+    ("upnp", "upnp_enable", ("1",)),
+    ("wps", "wps_enable", ("1",)),
+    ("openvpn_server1", "vpn_server1_state", ("1", "2")),  # 1 = starting, 2 = running
+    ("openvpn_server2", "vpn_server2_state", ("1", "2")),
+    ("wireguard_server", "wgs_enable", ("1",)),
+)
+WG_ACTIVE_SECONDS = 180  # WireGuard re-handshakes every 2 minutes while traffic flows
+
+
+def security_samples(node: str, nv: dict[str, str], text: str, now: float) -> list[Sample | None]:
+    out: list[Sample | None] = []
+    for setting, key, on in EXPOSURE_SETTINGS:
+        if key in nv and nv[key] != "":
+            out.append(sample("asus_exposure_enabled", 1 if nv[key] in on else 0, node=node, setting=setting))
+    if "vts_rulelist" in nv:
+        rules = parsers.parse_vts_rulelist(nv["vts_rulelist"])
+        out.append(sample("asus_port_forwards", len(rules), node=node))
+        for f in rules:
+            out.append(
+                sample(
+                    "asus_port_forward_info",
+                    1,
+                    node=node,
+                    rule=f.name,
+                    ext_port=f.ext_port,
+                    ip=f.ip,
+                    int_port=f.int_port,
+                    proto=f.proto,
+                )
+            )
+    sec = parsers.section_map(text)
+    if "upnp" in sec:
+        maps = parsers.parse_upnp_leases(sec["upnp"])
+        out.append(sample("asus_upnp_mappings", len(maps), node=node))
+        for m in maps:
+            out.append(
+                sample(
+                    "asus_upnp_mapping_info",
+                    1,
+                    node=node,
+                    proto=m.proto,
+                    ext_port=m.ext_port,
+                    ip=m.ip,
+                    int_port=m.int_port,
+                    desc=m.desc,
+                )
+            )
+    for n in ("1", "2"):
+        if nv.get(f"vpn_server{n}_state", "") not in ("1", "2"):
+            continue  # server off: no status file worth reading
+        server = f"openvpn{n}"
+        clients = parsers.parse_openvpn_status(sec.get(f"openvpn {n}", ""))
+        out.append(sample("asus_vpn_clients", len(clients), node=node, server=server))
+        for c in clients:
+            lab = {
+                "node": node,
+                "server": server,
+                "client": c.name,
+                "real_address": c.real_address,
+                "virtual_address": c.virtual_address,
+            }
+            out += [
+                sample("asus_vpn_client_connected_since_timestamp_seconds", c.since, **lab),
+                sample("asus_vpn_client_receive_bytes", c.rx_bytes, **lab),
+                sample("asus_vpn_client_transmit_bytes", c.tx_bytes, **lab),
+            ]
+    peers = parsers.parse_wg(sec.get("wg_handshakes", ""), sec.get("wg_transfer", ""))
+    if peers or nv.get("wgs_enable") == "1":
+        active = [p for p in peers if p.handshake and now - p.handshake < WG_ACTIVE_SECONDS]
+        out.append(sample("asus_vpn_clients", len(active), node=node, server="wireguard"))
+        for p in peers:
+            lab = {"node": node, "server": "wireguard", "iface": p.iface, "peer": p.peer[:8]}
+            out += [
+                sample("asus_wireguard_peer_last_handshake_timestamp_seconds", p.handshake or None, **lab),
+                sample("asus_vpn_client_receive_bytes", p.rx_bytes, **lab),
+                sample("asus_vpn_client_transmit_bytes", p.tx_bytes, **lab),
+            ]
+    return out
+
+
 def snr(rssi: float | None, noise: float | None) -> float | None:
     if rssi is None or noise is None or rssi >= 0:
         return None
@@ -294,7 +379,7 @@ def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], na
 
 
 # Store groups the slow loop fills; all are dropped if a slow poll fails.
-SLOW_GROUPS = ["slow", "wifi", "clients", "presence"]
+SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security"]
 
 # Sections every router returns; if one comes back empty or unparsable, it counts as a parse failure.
 FAST_REQUIRED = {
@@ -422,6 +507,8 @@ class NodePoller:
         self.store.set(self.node, "slow", out)
         if self.is_primary:
             await self._clients(nv)
+            security = await self.conn.run(commands.security_snapshot())
+            self.store.set(self.node, "security", security_samples(self.node, nv, security, time.time()))
         if self.wifi_bands or self.wifi_vifs:
             wifi = await self.conn.run(commands.wifi_snapshot(list(self.wifi_bands), list(self.wifi_vifs)))
             ifaces = {**self.wifi_bands, **self.wifi_vifs}

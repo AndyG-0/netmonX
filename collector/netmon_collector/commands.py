@@ -54,6 +54,16 @@ NVRAM_KEYS = (
     "wan1_ipaddr",
     "wan1_gateway",
     "wan1_dns",
+    # Things reachable from outside: port forwards, admin access from the WAN, UPnP, WPS, VPN servers.
+    "vts_enable_x",
+    "vts_rulelist",
+    "sshd_enable",
+    "misc_http_x",
+    "upnp_enable",
+    "wps_enable",
+    "vpn_server1_state",
+    "vpn_server2_state",
+    "wgs_enable",
     # IPv6 settings.
     "ipv6_service",
     "ipv6_rtr_addr",
@@ -136,6 +146,20 @@ def wifi_snapshot(radios: list[str], vifs: list[str] = ()) -> Command:
         "for m in $(wl -i $i assoclist 2>/dev/null | awk '{print $2}'); do "
         'echo "@@sta $i $m"; wl -i $i rssi $m 2>/dev/null; wl -i $i sta_info $m 2>/dev/null; '
         "done; done",
+    )
+
+
+def security_snapshot() -> Command:
+    """Main router only: UPnP port mappings and connected VPN clients (status files and `wg show`).
+
+    `wg show all latest-handshakes` and `transfer` print public keys only, never private or preshared keys.
+    """
+    return Command(
+        "security_snapshot",
+        "echo @@upnp; cat /tmp/upnp.leases 2>/dev/null; "
+        'for n in 1 2; do echo "@@openvpn $n"; cat /etc/openvpn/server$n/status 2>/dev/null; done; '
+        "echo @@wg_handshakes; wg show all latest-handshakes 2>/dev/null; "
+        "echo @@wg_transfer; wg show all transfer 2>/dev/null",
     )
 
 

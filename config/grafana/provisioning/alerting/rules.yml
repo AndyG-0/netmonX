@@ -447,3 +447,55 @@ groups:
           severity: info
         annotations:
           summary: "{{ $$labels.node }}: the router found newer firmware ({{ $$labels.latest }}). Update it from the Asus app or web UI."
+      - uid: admin-open-to-internet
+        title: Router admin open to the internet
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (node, setting) (asus_exposure_enabled{setting=~"ssh_wan|webui_wan"})'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $$labels.node }}: {{ $$labels.setting }} is on, so the router's admin login can be reached from the internet. Turn it off unless you need it."
+      - uid: port-forwards-changed
+        title: Port forwards or UPnP mappings changed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (node) (changes(asus_port_forwards[15m]) + changes(asus_upnp_mappings[15m]))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $$labels.node }}: the number of open ports changed (port forwarding or UPnP). Check the Security & VPN row on the Router dashboard."
