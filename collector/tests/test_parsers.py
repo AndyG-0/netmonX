@@ -123,6 +123,7 @@ def test_commands_are_read_only():
         commands.clients_snapshot().text,
         commands.security_snapshot().text,
         commands.config_hash().text,
+        commands.syslog_tail().text,
         commands.ping("1.1.1.1").text,
         commands.traceroute("1.1.1.1").text,
         commands.ping("2606:4700:4700::1111").text,
@@ -249,3 +250,15 @@ def test_config_hash():
         assert vol.match(f"{key}=x"), key
     for key in ("wl0_ssid", "wl0_wpa_psk", "vts_rulelist", "sshd_enable", "time_zone", "filter_lw_time_x"):
         assert not vol.match(f"{key}=x"), key
+
+
+def test_syslog_events():
+    lines = fixture("syslog.txt").splitlines()
+    counts = parsers.count_syslog_events(lines)
+    assert counts["wifi_connect"] == 1 and counts["wifi_disconnect"] == 1 and counts["band_steer"] == 1
+    assert counts["ssh_login_key"] == 1 and counts["ssh_login_password"] == 1 and counts["dfs_radar"] == 0
+    assert sum(counts.values()) == 11  # Auth and "determine candidate" lines aren't events
+    assert parsers.new_syslog_lines("a\nb\nc", None) == ([], "c", False)
+    assert parsers.new_syslog_lines("a\nb\nc", "b") == (["c"], "c", False)
+    assert parsers.new_syslog_lines("x\ny", "b") == (["x", "y"], "y", True)
+    assert parsers.new_syslog_lines("", "b") == ([], "b", False)

@@ -30,6 +30,7 @@ class FakeConn:
             "config_hash": "config_hash.txt",
             "ping": "ping_busybox.txt",
             "traceroute": "traceroute.txt",
+            "syslog": "syslog.txt",
         }[command.name]
         return (FIX / name).read_text()
 
@@ -62,7 +63,7 @@ def test_full_cycle_primary():
     poller, store, shared = make(conn)
 
     async def cycle():
-        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config"])
+        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config", "syslog"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
 
@@ -140,9 +141,9 @@ def test_mesh_node_skips_wan_and_ping():
 def test_failure_drops_values_and_marks_down():
     conn = FakeConn()
     poller, store, _ = make(conn)
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config", "syslog"]))
     conn.fail = True
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config", "syslog"]))
     text = render(store)
     assert 'asus_up{node="192.168.50.1"} 0.0' in text
     assert 'asus_poll_errors_total{loop="slow",node="192.168.50.1"} 1.0' in text
@@ -267,3 +268,23 @@ def test_wifi_score():
     # -70 dBm (0.5), half the 80 MHz rate (0.5), 10% retries (0.8): 0.25 + 0.15 + 0.16
     assert wifi_score(-70, 600.5, 80, 900, 100) == 56
     assert wifi_score(None, 1201, 80, 1, 0) is None
+
+
+def test_syslog_counts_only_new_lines():
+    conn = FakeConn()
+    poller, store, _ = make(conn)
+    log = (FIX / "syslog.txt").read_text().splitlines()
+    first = poller._syslog("\n".join(log[:4]))  # first poll: the baseline, nothing counted
+    base = {dict(s.labels)["event"]: s.value for s in first if s and s.name == "asus_syslog_events"}
+    assert base["ssh_login_key"] == 0
+    out = poller._syslog("\n".join(log[2:]))  # overlaps the last poll by two lines
+    events = {dict(s.labels)["event"]: s.value for s in out if s and s.name == "asus_syslog_events"}
+    assert events["wan_down"] == 1 and events["wan_restored"] == 1 and events["ssh_login_failed"] == 1
+    assert events["ssh_login_password"] == 0 and events["wifi_connect"] == 0  # already seen in the first poll
+    assert events["roam_assist"] == 1 and events["out_of_memory"] == 1 and events["vpn_login"] == 1
+    lines = {s.name: s.value for s in out if s and s.name in ("asus_syslog_lines", "asus_syslog_gaps")}
+    assert lines == {"asus_syslog_lines": len(log) - 4, "asus_syslog_gaps": 0}
+    out = poller._syslog("Nov 12 00:00:01 syslogd started: BusyBox v1.25.1")  # rotated
+    assert {s.name: s.value for s in out if s and s.name == "asus_syslog_gaps"} == {"asus_syslog_gaps": 1}
+    fresh, _, _ = make(FakeConn())
+    assert fresh._syslog("") == []  # a node without a readable log exports nothing

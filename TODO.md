@@ -115,9 +115,10 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **Templated router IP** (S): the `dns` job in `prometheus.yml` hard-codes 192.168.50.1. Generate it
       from `ROUTER_HOST`, or use the SD endpoint.
       Done: the `dns` job gets the router from `/sd/dns`, which follows `ROUTER_HOST`.
-- [ ] **Syslog events** (M) [UniFi event log]: `tail -n` of `/tmp/syslog.log` since the last offset. Count
+- [x] **Syslog events** (M) [UniFi event log]: `tail -n` of `/tmp/syslog.log` since the last offset. Count
       matched events (WAN reconnect, DFS radar, auth failure, OOM, roam) as counters. Optionally send raw lines
       to Loki in an extra compose profile.
+      Done: Done: each slow poll reads `tail -n 500 /tmp/syslog.log` on every node, counts only lines after the newest one seen last time (first poll is the baseline; a rotation counts as a gap), and exports `asus_syslog_events_total{event}` for 16 events (WAN down/restored, SSH password/key logins and failures, web/VPN login failures, VPN logins, Wi-Fi connects/disconnects, roam assist, weak-signal kicks, band steering, DFS radar, OOM, crash). Patterns from the real router's log. "Router events" row on Router & Mesh; alerts for failed logins and out-of-memory. Loki not done.
 - [ ] **Per-client traffic for wired devices** (L) [UniFi traffic stats, Firewalla]: today's per-client bytes
       come only from `wl` (Wi-Fi). Look at read-only sources: conntrack acct (`/proc/net/nf_conntrack`, when
       `nf_conntrack_acct=1`), or Asus Traffic Analyzer's database (when the user has it on). Research first.

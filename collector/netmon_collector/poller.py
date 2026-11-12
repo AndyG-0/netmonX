@@ -434,7 +434,7 @@ def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], na
 
 
 # Store groups the slow loop fills; all are dropped if a slow poll fails.
-SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security", "config"]
+SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security", "config", "syslog"]
 
 # Sections every router returns; if one comes back empty or unparsable, it counts as a parse failure.
 FAST_REQUIRED = {
@@ -498,6 +498,10 @@ class NodePoller:
         self._errors: dict[str, int] = {}
         self._ping_totals: dict[str, list[int]] = {}  # target -> [sent, received]
         self._hop_totals: dict[int, list[int]] = {}  # traceroute hop -> [probes sent, answered]
+        self._syslog_last: str | None = None  # newest syslog line already counted
+        self._syslog_counts = {event: 0 for event, _ in parsers.SYSLOG_EVENTS}
+        self._syslog_lines = 0
+        self._syslog_gaps = 0
         self._ok: dict[str, bool] = {}
         self.metrics = SELF
 
@@ -569,6 +573,7 @@ class NodePoller:
             security = await self.conn.run(commands.security_snapshot())
             self.store.set(self.node, "security", security_samples(self.node, nv, security, time.time()))
             self.store.set(self.node, "config", self._config(await self.conn.run(commands.config_hash())))
+        self.store.set(self.node, "syslog", self._syslog(await self.conn.run(commands.syslog_tail())))
         if self.wifi_bands or self.wifi_vifs:
             wifi = await self.conn.run(commands.wifi_snapshot(list(self.wifi_bands), list(self.wifi_vifs)))
             ifaces = {**self.wifi_bands, **self.wifi_vifs}
@@ -576,6 +581,20 @@ class NodePoller:
                 self.node, "wifi", wifi_samples(self.node, wifi, ifaces, self.shared.hostnames, self.channels)
             )
             self.shared.node_ssids[self.node] = ssid_keys(parsers.parse_wifi_snapshot(wifi), ifaces)
+
+    def _syslog(self, text: str) -> list[Sample | None]:
+        """Counters of known events in the router log, from lines new since the last poll."""
+        lines, self._syslog_last, gap = parsers.new_syslog_lines(text, self._syslog_last)
+        self._syslog_lines += len(lines)
+        self._syslog_gaps += gap
+        for event, n in parsers.count_syslog_events(lines).items():
+            self._syslog_counts[event] += n
+        if self._syslog_last is None:  # no log on this node (or not readable)
+            return []
+        out = [sample("asus_syslog_events", n, node=self.node, event=e) for e, n in self._syslog_counts.items()]
+        out.append(sample("asus_syslog_lines", self._syslog_lines, node=self.node))
+        out.append(sample("asus_syslog_gaps", self._syslog_gaps, node=self.node))
+        return out
 
     def _config(self, text: str) -> list[Sample | None]:
         """Config drift: a hash of the router's settings; a change counts once per new hash."""

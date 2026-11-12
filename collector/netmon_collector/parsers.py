@@ -743,3 +743,57 @@ def parse_config_hash(text: str) -> tuple[str, int | None] | None:
         return None
     count = re.search(r"^\s*(\d+)\s*$", text[m.end() :], re.M)
     return m.group(1), int(count.group(1)) if count else None
+
+
+# --- syslog ----------------------------------------------------------------
+
+# Events counted from /tmp/syslog.log. Patterns come from stock Asus firmware logs
+# (3.0.0.4.388); a firmware that words things differently just counts nothing.
+SYSLOG_EVENTS: tuple[tuple[str, re.Pattern], ...] = tuple(
+    (event, re.compile(rx))
+    for event, rx in (
+        ("wan_down", r"WAN(\(\d\))? Connection: .*(link down|[Dd]isconnect|did not function|lost)"),
+        ("wan_restored", r"WAN(\(\d\))? Connection: WAN was restored"),
+        ("ssh_login_password", r"dropbear\[\d+\]: Password auth succeeded"),
+        ("ssh_login_key", r"dropbear\[\d+\]: Pubkey auth succeeded"),
+        ("ssh_login_failed", r"dropbear\[\d+\]: .*(Bad password attempt|nonexistent user|Max auth tries)"),
+        ("web_login_failed", r"(?i)abnormal logins|login fail"),
+        ("vpn_login", r"vpnserver\d\[\d+\]: .*authentication succeeded for username"),
+        ("vpn_login_failed", r"vpnserver\d\[\d+\]: .*(AUTH_FAILED|[Aa]uthentication failed|TLS handshake failed)"),
+        ("wifi_connect", r"wlceventd: .*: (Re)?Assoc \S+, status: Successful"),
+        ("wifi_disconnect", r"wlceventd: .*: (Disassoc|Deauth_ind) \S+,"),
+        ("roam_assist", r"roamast: Roam a client"),
+        ("weak_signal_kick", r"roamast: .*disconnect weak signal strength station"),
+        ("band_steer", r"bsd: bsd: Sending act Frame"),
+        ("dfs_radar", r"(?i)radar"),
+        ("out_of_memory", r"(?i)out of memory|oom-killer|Killed process"),
+        ("crash", r"(?i)segfault|kernel panic|Oops:"),
+    )
+)
+
+
+def new_syslog_lines(text: str, last: str | None) -> tuple[list[str], str | None, bool]:
+    """Lines after `last` (the newest line seen on the previous poll).
+
+    Returns (new lines, newest line now, gap). Gap is True when `last` isn't in
+    the output any more (the log rotated, or more lines came than were read),
+    in which case every line counts. With last=None (first poll) nothing counts.
+    """
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    newest = lines[-1] if lines else last
+    if last is None:
+        return [], newest, False
+    for i in range(len(lines) - 1, -1, -1):
+        if lines[i] == last:
+            return lines[i + 1 :], newest, False
+    return lines, newest, bool(lines)
+
+
+def count_syslog_events(lines: list[str]) -> dict[str, int]:
+    counts = {event: 0 for event, _ in SYSLOG_EVENTS}
+    for line in lines:
+        for event, rx in SYSLOG_EVENTS:
+            if rx.search(line):
+                counts[event] += 1
+                break
+    return counts

@@ -41,6 +41,7 @@ under the new version when you cut a release.
 - ISP report card dashboard and 30-day recording rules; ISP_PLAN_DOWN/UP compare speed tests with your plan.
 - Bufferbloat grade (A+ to F) from Speedtest Tracker's loaded latency.
 - Per-hop traceroute loss and latency (3 probes per hop).
+- Router log events (logins, WAN, Wi-Fi, OOM) as counters, with failed-login and out-of-memory alerts.
 
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.

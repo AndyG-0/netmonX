@@ -650,6 +650,24 @@ def router(links) -> dict:
     L.row("Topology")
     L.add(topology(), 24, 16)
 
+    L.row("Router events (from the router log)")
+    ev = 'sum by (event) (increase(asus_syslog_events_total{{node=~"$node", event=~"{}"}}[$__range]))'
+    L.add(bargauge("Events in range", ev.format(".*") + " > 0", "{{event}}",
+                   description="Counted from /tmp/syslog.log on each node, from lines written after the collector "
+                               "started. ssh_login_key includes the collector's own logins."), 8, 10)
+    hourly = 'sum by (event) (increase(asus_syslog_events_total{{node=~"$node", event=~"{}"}}[1h]))'
+    L.add(timeseries("Logins and failures per hour",
+                     [target(hourly.format("ssh_.*|vpn_.*|web_.*"), "{{event}}")],
+                     "none", min_=0, fill=0, legend_calcs=("sum", "max"),
+                     description="ssh_login_password: something logged in to the router with the admin password "
+                                 "(the Asus app, a script, or a person). Failures are worth a look."), 8, 10)
+    L.add(timeseries("Wi-Fi and WAN events per hour",
+                     [target(hourly.format("wifi_.*|roam_.*|weak_.*|band_.*|wan_.*|dfs_.*|out_of_.*|crash"),
+                             "{{event}}")],
+                     "none", min_=0, fill=0, legend_calcs=("sum", "max"),
+                     description="roam_assist / weak_signal_kick: the router pushed a device off a weak link. "
+                                 "dfs_radar: radar forced a 5 GHz channel change."), 8, 10)
+
     L.row("Collector")
     L.add(timeseries(
         "SSH command time (p95)",

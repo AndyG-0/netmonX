@@ -190,6 +190,15 @@ def config_hash() -> Command:
     )
 
 
+SYSLOG_PATH = "/tmp/syslog.log"
+
+
+def syslog_tail(lines: int = 500) -> Command:
+    """The end of the router's log; the poller counts only lines it hasn't seen yet."""
+    lines = max(1, min(int(lines), 2000))
+    return Command("syslog", f"tail -n {lines} {SYSLOG_PATH} 2>/dev/null")
+
+
 def clients_snapshot() -> Command:
     """AiMesh's own client list (main router only): every device, wired or Wi-Fi, by node and band."""
     return Command("clients_snapshot", "cat /tmp/clientlist.json 2>/dev/null")

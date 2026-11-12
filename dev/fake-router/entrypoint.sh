@@ -15,5 +15,10 @@ cat > /tmp/clientlist.json <<'JSON'
 JSON
 # One UPnP mapping (miniupnpd lease format).
 echo "UDP:3074:192.168.50.60:3074:0:Game console" > /tmp/upnp.leases
+# A few router log lines (the collector counts only lines added after its first poll).
+cat > /tmp/syslog.log <<'LOG'
+Nov 11 22:40:12 wlceventd: wlceventd_proc_event(722): eth6: Assoc 7C:D9:5C:11:22:33, status: Successful (0), rssi:-49
+Nov 11 22:41:30 roamast: Roam a client [D0:50:99:00:00:09], status [0]
+LOG
 # -s: no password logins, -R: create host keys, -F/-E: foreground, log to stderr
 exec dropbear -F -E -R -s -p 22

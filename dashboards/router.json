@@ -1871,12 +1871,203 @@
     },
     {
       "type": "row",
-      "title": "Collector",
+      "title": "Router events (from the router log)",
       "id": 26,
       "collapsed": false,
       "gridPos": {
         "x": 0,
         "y": 104,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "bargauge",
+      "title": "Events in range",
+      "description": "Counted from /tmp/syslog.log on each node, from lines written after the collector started. ssh_login_key includes the collector's own logins.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (event) (increase(asus_syslog_events_total{node=~\"$node\", event=~\".*\"}[$__range])) > 0",
+          "legendFormat": "{{event}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "decimals": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "text",
+        "namePlacement": "left",
+        "sizing": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "id": 27,
+      "gridPos": {
+        "x": 0,
+        "y": 105,
+        "w": 8,
+        "h": 10
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Logins and failures per hour",
+      "description": "ssh_login_password: something logged in to the router with the admin password (the Asus app, a script, or a person). Failures are worth a look.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (event) (increase(asus_syslog_events_total{node=~\"$node\", event=~\"ssh_.*|vpn_.*|web_.*\"}[1h]))",
+          "legendFormat": "{{event}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 28,
+      "gridPos": {
+        "x": 8,
+        "y": 105,
+        "w": 8,
+        "h": 10
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Wi-Fi and WAN events per hour",
+      "description": "roam_assist / weak_signal_kick: the router pushed a device off a weak link. dfs_radar: radar forced a 5 GHz channel change.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (event) (increase(asus_syslog_events_total{node=~\"$node\", event=~\"wifi_.*|roam_.*|weak_.*|band_.*|wan_.*|dfs_.*|out_of_.*|crash\"}[1h]))",
+          "legendFormat": "{{event}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "sum",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 29,
+      "gridPos": {
+        "x": 16,
+        "y": 105,
+        "w": 8,
+        "h": 10
+      }
+    },
+    {
+      "type": "row",
+      "title": "Collector",
+      "id": 30,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 115,
         "w": 24,
         "h": 1
       },
@@ -1931,10 +2122,10 @@
           "sort": "desc"
         }
       },
-      "id": 27,
+      "id": 31,
       "gridPos": {
         "x": 0,
-        "y": 105,
+        "y": 116,
         "w": 12,
         "h": 8
       }
@@ -2006,10 +2197,10 @@
           "sort": "desc"
         }
       },
-      "id": 28,
+      "id": 32,
       "gridPos": {
         "x": 12,
-        "y": 105,
+        "y": 116,
         "w": 12,
         "h": 8
       }

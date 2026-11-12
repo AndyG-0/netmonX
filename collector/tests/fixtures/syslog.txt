@@ -1,0 +1,13 @@
+Nov 11 22:40:01 dropbear[4120]: Pubkey auth succeeded for 'admin' with ssh-ed25519 key SHA256:AAAAexamplekeyexamplekeyexamplekeyexampleAA from 192.168.50.38:56491
+Nov 11 22:40:12 wlceventd: wlceventd_proc_event(685): eth6: Auth AA:00:00:00:00:01, status: Successful (0), rssi:0
+Nov 11 22:40:12 wlceventd: wlceventd_proc_event(722): eth6: Assoc AA:00:00:00:00:01, status: Successful (0), rssi:-61
+Nov 11 22:41:00 dropbear[4188]: Password auth succeeded for 'admin' from 192.168.50.50:40122
+Nov 11 22:41:30 roamast: determine candidate node [AA:00:00:00:00:10](rssi: -48dbm) for client [AA:00:00:00:00:02](rssi: -80dbm from client)(rssi: -79dbm from ap) to roam
+Nov 11 22:41:30 roamast: Roam a client [AA:00:00:00:00:02], status [0]
+Nov 11 22:42:05 bsd: bsd: Sending act Frame to AA:00:00:00:00:03 with transition target eth7 ssid AA:00:00:00:00:11
+Nov 11 22:42:30 wlceventd: wlceventd_proc_event(662): wl0.1: Disassoc AA:00:00:00:00:04, status: 0, reason: Disassociated because sending station is leaving (or has left) BSS (8), rssi:0
+Nov 11 22:43:01 WAN(0) Connection: WAN(0) link down.
+Nov 11 22:43:40 WAN(0) Connection: WAN was restored.
+Nov 11 22:44:02 dropbear[4301]: Bad password attempt for 'admin' from 192.168.50.77:51000
+Nov 11 22:44:20 vpnserver1[2211]: client/198.51.100.7:32489 TLS: Username/Password authentication succeeded for username 'phone'
+Nov 11 22:44:21 kernel: Out of memory: Killed process 1234 (httpd)
