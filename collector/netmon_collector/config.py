@@ -40,6 +40,10 @@ class Config:
     slow_interval: float
     listen_port: int
     listen_addr: str = "0.0.0.0"
+    state_dir: str | None = None  # saves device history here so it survives restarts
+    devices_file: str | None = None  # devices.yml: names, owners, types, offline alerts
+    oui_file: str | None = None  # Wireshark `manuf` file for MAC vendor names
+    client_retention_days: float = 30
 
     @classmethod
     def from_env(cls) -> Config:
@@ -79,4 +83,8 @@ class Config:
             slow_interval=float(_env("SLOW_INTERVAL", "300")),
             listen_port=int(_env("LISTEN_PORT", "9877")),
             listen_addr=_env("LISTEN_ADDR", "0.0.0.0"),
+            state_dir=_env("STATE_DIR") or None,
+            devices_file=_env("DEVICES_FILE") or None,
+            oui_file=_env("OUI_FILE") or None,
+            client_retention_days=float(_env("CLIENT_RETENTION_DAYS", "30")),
         )

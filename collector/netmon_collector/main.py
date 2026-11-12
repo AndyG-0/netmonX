@@ -13,6 +13,7 @@ from prometheus_client.registry import CollectorRegistry
 from .config import Config
 from .metrics import BuildInfoCollector, Store, StoreCollector, collector_version
 from .poller import NodePoller, SharedState
+from .presence import ClientTracker, DevicesFile, OuiTable
 from .selfmetrics import SELF
 from .ssh import RouterConnection
 
@@ -60,7 +61,11 @@ async def run() -> None:
     start_http_server(cfg.listen_port, addr=cfg.listen_addr, registry=registry)
     log.info("collector %s serving metrics on %s:%s/metrics", collector_version(), cfg.listen_addr, cfg.listen_port)
 
-    shared = SharedState()
+    shared = SharedState(
+        tracker=ClientTracker(cfg.state_dir, cfg.client_retention_days),
+        devices=DevicesFile(cfg.devices_file),
+        oui=OuiTable(cfg.oui_file),
+    )
     tasks = [_poller(cfg, cfg.router_host, store, shared, primary=True).run()]
     if cfg.mesh_ssh and cfg.mesh_nodes:
         tasks.append(_watch_mesh(cfg, store, shared))

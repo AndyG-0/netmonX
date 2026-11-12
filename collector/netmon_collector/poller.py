@@ -7,7 +7,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from . import commands, parsers
+from . import commands, parsers, presence
 from .metrics import Sample, Store, sample
 from .selfmetrics import SELF
 from .ssh import RouterConnection
@@ -23,6 +23,9 @@ class SharedState:
     mesh_nodes: list[parsers.MeshNode] = field(default_factory=list)
     # node -> {"wl0.2": "Guest", "wl0": "Home", ...}: SSIDs as each node's own radios report them.
     node_ssids: dict[str, dict[str, str]] = field(default_factory=dict)
+    tracker: presence.ClientTracker = field(default_factory=presence.ClientTracker)
+    devices: presence.DevicesFile = field(default_factory=lambda: presence.DevicesFile(None))
+    oui: presence.OuiTable = field(default_factory=presence.OuiTable)
 
 
 def ssid_keys(snap: parsers.WifiSnapshot, ifaces: dict[str, str]) -> dict[str, str]:
@@ -138,6 +141,8 @@ def client_samples(
     ssids: dict[str, str],
     names: dict[str, str],
     node_ssids: dict[str, dict[str, str]] | None = None,
+    meta: dict[str, presence.DeviceMeta] | None = None,
+    vendor=None,
 ) -> list[Sample | None]:
     """Samples for the deduplicated AiMesh client list.
 
@@ -146,6 +151,7 @@ def client_samples(
     node_ssids: per node label, the SSIDs its own radios report. They win, because a band key like
     "2G_2" means interface wl0.2 on the node the client is attached to, and nodes number guest
     networks differently from the main router.
+    meta: devices.yml entries (owner, type labels); vendor: MAC -> vendor name.
     """
     out: list[Sample | None] = []
     counts: dict[tuple[str, str, str, str], int] = {}
@@ -166,7 +172,9 @@ def client_samples(
             "band": c.band,
             "ssid": ssid,
         }
-        out.append(sample("asus_client_info", 1, ip=c.ip, **lab))
+        m = (meta or {}).get(c.mac) or presence.DeviceMeta()
+        extra = {"vendor": vendor(c.mac) if vendor else "", "owner": m.owner, "type": m.type}
+        out.append(sample("asus_client_info", 1, ip=c.ip, **lab, **extra))
         out.append(sample("asus_client_rssi_dbm", c.rssi_dbm, **lab))
     for (node, conn, band, ssid), n in counts.items():
         out.append(
@@ -183,6 +191,42 @@ def client_samples(
     return out
 
 
+def presence_samples(
+    tracker: presence.ClientTracker,
+    meta: dict[str, presence.DeviceMeta],
+    now: float,
+    new_window: float = 3600,
+) -> list[Sample | None]:
+    """Online state, first/last seen, new devices and roams for every device seen in the retention window."""
+    out: list[Sample | None] = []
+    for mac, seen in tracker.devices.items():
+        m = meta.get(mac) or presence.DeviceMeta()
+        lab = {"mac": mac, "hostname": m.name or seen.name}
+        out.append(sample("asus_client_online", 1 if mac in tracker.online else 0, **lab, owner=m.owner, type=m.type))
+        out.append(sample("asus_client_last_seen_timestamp_seconds", seen.last_seen, **lab))
+        out.append(sample("asus_client_first_seen_timestamp_seconds", seen.first_seen, **lab))
+        out.append(sample("asus_client_roams", seen.roams, **lab))
+        if seen.new and now - seen.first_seen < new_window:
+            out.append(sample("asus_client_new", 1, **lab))
+        if seen.last_roam:
+            r = seen.last_roam
+            out.append(
+                sample(
+                    "asus_client_last_roam_timestamp_seconds",
+                    r["ts"],
+                    **lab,
+                    from_node=r["from_node"],
+                    to_node=r["to_node"],
+                    from_band=r["from_band"],
+                    to_band=r["to_band"],
+                )
+            )
+    for mac, m in meta.items():
+        if m.alert_offline_hours:
+            out.append(sample("asus_device_offline_alert_hours", m.alert_offline_hours, mac=mac, hostname=m.name))
+    return out
+
+
 def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], names: dict[str, str]):
     """(node MAC -> node label, node label -> display name). Names set in the Asus app win if they're unique."""
     nodes = {primary_mac: primary, **{n.mac: n.ip for n in mesh}}
@@ -196,6 +240,9 @@ def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], na
             display[label] = f"main {label}" if label == primary else f"node {label}"
     return nodes, display
 
+
+# Store groups the slow loop fills; all are dropped if a slow poll fails.
+SLOW_GROUPS = ["slow", "wifi", "clients", "presence"]
 
 # Sections every router returns; if one comes back empty or unparsable, it counts as a parse failure.
 FAST_REQUIRED = {
@@ -320,7 +367,10 @@ class NodePoller:
     async def _clients(self, nv: dict[str, str]) -> None:
         """Every device on the mesh, wired or Wi-Fi, from the main router's AiMesh client list."""
         app_names = parsers.parse_custom_clientlist(nv.get("custom_clientlist", ""))
-        self.shared.hostnames = {**self.shared.hostnames, **app_names}
+        meta = self.shared.devices.get()
+        own_names = {mac: m.name for mac, m in meta.items() if m.name}
+        # devices.yml beats names set in the Asus app, which beat DHCP hostnames.
+        self.shared.hostnames = {**self.shared.hostnames, **app_names, **own_names}
         primary_mac = nv.get("lan_hwaddr", "").upper()
         nodes, display = node_labels(self.node, primary_mac, self.shared.mesh_nodes, app_names)
         raw_text = await self.conn.run(commands.clients_snapshot())
@@ -329,11 +379,23 @@ class NodePoller:
             self.metrics.parse_failures.labels(self.node, "clientlist").inc()
         clients = parsers.dedupe_clients(raw, primary_mac, set(nodes))
         ssids = {k[: -len("_ssid")]: v for k, v in nv.items() if k.endswith("_ssid") and k.startswith("wl")}
+        names = self.shared.hostnames
         self.store.set(
             self.node,
             "clients",
-            client_samples(clients, nodes, display, ssids, self.shared.hostnames, self.shared.node_ssids),
+            client_samples(clients, nodes, display, ssids, names, self.shared.node_ssids, meta, self.shared.oui.vendor),
         )
+        # Presence and roaming. Use display names so "from"/"to" read like the rest of the dashboards.
+        tracker = self.shared.tracker
+        now = time.time()
+        attached = {c.mac: (display.get(nodes.get(c.node_mac, c.node_mac), c.node_mac), c.band) for c in clients}
+        for roam in tracker.update(attached, now):
+            log.info("%s roamed %s %s -> %s %s", roam.mac, roam.from_node, roam.from_band, roam.to_node, roam.to_band)
+        for mac in attached:
+            if names.get(mac):
+                tracker.devices[mac].name = names[mac]
+        tracker.save()
+        self.store.set(self.node, "presence", presence_samples(tracker, meta, now))
 
     async def _slow_primary(self, nv: dict[str, str], sec: dict[str, str]) -> list[Sample | None]:
         out: list[Sample | None] = []
@@ -418,12 +480,18 @@ class NodePoller:
 
     async def run(self) -> None:
         # Slow poll first: it learns the WAN interface and ISP hop the fast poll needs.
-        await self._guard("slow", self.poll_slow, ["slow", "wifi", "clients"])
+        await self._guard("slow", self.poll_slow, SLOW_GROUPS)
         # If that first try failed, retry soon instead of waiting a full slow interval.
         first_wait = self.slow_interval if self._ok.get("slow") else min(30.0, self.slow_interval)
         await asyncio.gather(
             self._every(self.fast_interval, "fast", self.poll_fast, ["fast", "ping"]),
-            self._every(self.slow_interval, "slow", self.poll_slow, ["slow", "wifi", "clients"], first_wait=first_wait),
+            self._every(
+                self.slow_interval,
+                "slow",
+                self.poll_slow,
+                SLOW_GROUPS,
+                first_wait=first_wait,
+            ),
         )
 
     async def _every(self, interval: float, loop: str, fn, groups: list[str], first_wait: float = 0) -> None:

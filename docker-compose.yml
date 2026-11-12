@@ -22,10 +22,18 @@ services:
       FAST_INTERVAL: ${FAST_INTERVAL:-15}
       SLOW_INTERVAL: ${SLOW_INTERVAL:-300}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Device history (first/last seen, roams) survives restarts in the collector_state volume.
+      STATE_DIR: /var/lib/netmonx
+      CLIENT_RETENTION_DAYS: ${CLIENT_RETENTION_DAYS:-30}
+      # Optional files in config/collector/ (see devices.yml.example and scripts/update-oui.sh).
+      DEVICES_FILE: /etc/netmonx/devices.yml
+      OUI_FILE: /etc/netmonx/manuf
     # Run as the host user that owns secrets/router_key, so the key can stay chmod 600.
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     volumes:
       - ./secrets/router_key:/run/secrets/router_key:ro
+      - ./config/collector:/etc/netmonx:ro
+      - collector_state:/var/lib/netmonx
 
   # LAN-side latency, jitter and loss (SmokePing-style histograms).
   smokeping:
@@ -106,6 +114,7 @@ services:
     profiles: ["netalertx"]
 
 volumes:
+  collector_state:
   prometheus_data:
   grafana_data:
   speedtest_data:

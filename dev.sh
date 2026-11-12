@@ -122,6 +122,9 @@ run_collector() {  # run_collector [fake]
   # Localhost only: containers reach it through the engine's host alias.
   export LISTEN_PORT=${LISTEN_PORT:-9877} LISTEN_ADDR=${LISTEN_ADDR:-127.0.0.1} LOG_LEVEL=${LOG_LEVEL:-INFO}
   [[ ${FAST:-} == 1 ]] && export FAST_INTERVAL=5 SLOW_INTERVAL=30
+  # Same optional files as the container; device history goes to a git-ignored folder.
+  export DEVICES_FILE=${DEVICES_FILE:-$ROOT/config/collector/devices.yml} OUI_FILE=${OUI_FILE:-$ROOT/config/collector/manuf} \
+    STATE_DIR=${STATE_DIR:-$ROOT/dev/.state}
   if [[ ${1:-} == fake ]]; then
     dev_key
     export ROUTER_HOST=127.0.0.1 ROUTER_PORT=2222 ROUTER_USER=root ROUTER_KEY_PATH=$ROOT/secrets/dev_key \

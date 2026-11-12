@@ -4,19 +4,27 @@ Ideas for future work, grouped by priority. Inspiration in [brackets].
 Rule for everything here: router access stays read-only (`collector/netmon_collector/commands.py`).
 Effort: S = an evening, M = a weekend, L = bigger.
 
+## Questions for Andy
+
+- **OUI dataset:** vendor names need Wireshark's `manuf` file (~2 MB, GPL-2 distribution). I didn't commit it; `scripts/update-oui.sh` fetches it. Commit it (or bake it into the image) if you want vendors out of the box.
+
 ## P1: high value, uses data we already collect or can read cheaply
 
 ### Clients
-- [ ] **Roaming history** (S) [UniFi client timeline]: watch for a device's node/band changing between
+- [x] **Roaming history** (S) [UniFi client timeline]: watch for a device's node/band changing between
       clientlist.json polls. Export `asus_client_roams_total{mac,from_node,to_node}`. Add a "Recent roams" panel.
-- [ ] **Device first-seen / last-seen / online gauge** (S) [UniFi, eero]: `asus_client_online{mac}` (0/1) and
+      Done: `asus_client_roams_total{mac}` plus `asus_client_last_roam_timestamp_seconds{from_node,to_node,from_band,to_band}` (a from/to label per roam counter would grow without limit). "Presence & roaming" row on the Clients dashboard.
+- [x] **Device first-seen / last-seen / online gauge** (S) [UniFi, eero]: `asus_client_online{mac}` (0/1) and
       `asus_client_last_seen_timestamp_seconds`. Gives presence ("who's home") and a per-device uptime timeline.
-- [ ] **Vendor lookup by MAC OUI** (S) [UniFi fingerprinting, Fing]: bundle an offline OUI table
+      Done: `asus_client_online`, `asus_client_last_seen_timestamp_seconds`, `asus_client_first_seen_timestamp_seconds`, `asus_client_new` (collector/netmon_collector/presence.py). State is saved to `STATE_DIR` (compose volume `collector_state`); devices age out after `CLIENT_RETENTION_DAYS`.
+- [x] **Vendor lookup by MAC OUI** (S) [UniFi fingerprinting, Fing]: bundle an offline OUI table
       (IEEE / Wireshark `manuf`) and add a `vendor` label to `asus_client_info`. Show "random/private MAC"
       when the locally-administered bit is set.
-- [ ] **Device names / owners / groups file** (S) [UniFi aliases, Firewalla groups]: optional
+      Done: Private-MAC detection always on; maker names from an optional Wireshark `manuf` file (`OUI_FILE`, fetched by `scripts/update-oui.sh`). The dataset isn't committed: see Questions for Andy.
+- [x] **Device names / owners / groups file** (S) [UniFi aliases, Firewalla groups]: optional
       `config/devices.yml` mapping MAC → name, owner, type (phone, IoT, PC). Exported as labels so panels can be
       filtered by owner or device type.
+      Done: `config/collector/devices.yml` (`DEVICES_FILE`), reloaded on change; adds `owner`/`type` labels and `asus_device_offline_alert_hours`.
 - [ ] **Per-device drill-down dashboard** (M) [UniFi client page]: one `$mac` variable. Show signal, link rate,
       node/roam history, traffic, online timeline, DHCP lease and vendor.
 - [ ] **Wi-Fi experience score** (M) [UniFi "Wi-Fi Experience", Meraki]: a 0-100 score per client from RSSI,

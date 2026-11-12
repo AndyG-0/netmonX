@@ -1,0 +1,25 @@
+# Optional: your own names, owners and types for devices.
+#   cp config/collector/devices.yml.example config/collector/devices.yml
+# The collector rereads the file when it changes (no restart needed). It is git-ignored.
+#
+# name:                shown instead of the DHCP / Asus app name
+# owner, type:         exported as labels on asus_client_info and asus_client_online,
+#                      so dashboards can filter by person or device kind
+# alert_offline_hours: alert when this device hasn't been seen for this long (leave out to never alert)
+#
+# MACs can use ":" or "-" and any case. Phones with "private Wi-Fi address" turned on use a different
+# MAC per network; use the one shown for your network in the phone's Wi-Fi settings.
+devices:
+  "AA:BB:CC:DD:EE:01":
+    name: Alex's phone
+    owner: alex
+    type: phone
+    alert_offline_hours: 24
+  "AA:BB:CC:DD:EE:02":
+    name: Living room TV
+    owner: family
+    type: tv
+  "AA:BB:CC:DD:EE:03":
+    name: Front door camera
+    type: iot
+    alert_offline_hours: 1

@@ -8,6 +8,9 @@ recon/
 *.egg-info/
 dev/.prometheus.local.yml
 dev/.dashboards/
+dev/.state/
 **/.ruff_cache/
 .DS_Store
 dist/
+config/collector/devices.yml
+config/collector/manuf

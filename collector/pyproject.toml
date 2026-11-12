@@ -8,6 +8,7 @@ dependencies = [
     # 47+ crashes ("Illegal instruction") on some ARM VMs; 46.x works everywhere.
     "cryptography==46.0.7",
     "prometheus-client==0.22.1",
+    "pyyaml==6.0.2",
 ]
 
 [project.optional-dependencies]

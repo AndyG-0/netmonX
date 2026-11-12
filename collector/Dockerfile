@@ -14,7 +14,9 @@ RUN useradd --create-home --uid 10001 collector
 WORKDIR /app
 COPY pyproject.toml ./
 COPY netmon_collector ./netmon_collector
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+    # Device history (STATE_DIR). Any uid may write: compose runs the container as the host user.
+    && mkdir -p /var/lib/netmonx && chmod 1777 /var/lib/netmonx
 
 ENV COLLECTOR_VERSION=${VERSION}
 USER collector

@@ -16,5 +16,9 @@ under the new version when you cut a release.
 - `netmonx_collector_build_info` metric with the running version.
 - GitHub Actions CI, image publishing and release workflows; `scripts/release.sh` for semver releases.
 - Collector self-metrics: SSH command duration histogram, command errors, connects and parse failures, with a "Collector" row on the Router & Mesh dashboard.
+- Device presence: online gauge, first/last seen and new-device flag, kept across restarts in the `collector_state` volume.
+- Roaming history: roams counter per device, the latest roam's from/to node and band, and a Presence & roaming row on the Clients dashboard.
+- Vendor label on `asus_client_info`: private (random) MACs always, maker names from an optional OUI file (`scripts/update-oui.sh`).
+- `devices.yml`: names, owners, types and per-device offline alerts by MAC.
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main

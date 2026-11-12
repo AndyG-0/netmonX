@@ -419,16 +419,17 @@ def clients(links, netalertx_url) -> dict:
     inst = lambda expr, ref: target(expr, ref=ref, instant=True, table=True)  # noqa: E731
     hide = {"Time": True, "__name__": True, "job": True, "instance": True}
     names = {"hostname": "Name", "mac": "MAC", "ip": "IP", "node_name": "Mesh node", "connection": "Connection",
-             "band": "Band", "ssid": "SSID"}
+             "band": "Band", "ssid": "SSID", "vendor": "Vendor", "owner": "Owner", "type": "Type"}
     signal = override("Signal", unit="dBm", custom_cellOptions={"type": "color-background"},
                       thresholds=thresholds((None, "red"), (-75, "orange"), (-67, "yellow"), (-55, "green")),
                       color={"mode": "thresholds"})
-    order = {"Name": 0, "IP": 1, "Mesh node": 2, "Connection": 3, "Band": 4, "SSID": 5, "Signal": 6, "MAC": 7}
+    order = {"Name": 0, "IP": 1, "Mesh node": 2, "Connection": 3, "Band": 4, "SSID": 5, "Signal": 6, "MAC": 7,
+             "Vendor": 8, "Owner": 9, "Type": 10}
     L.row("All devices")
     L.add(table(
         "All devices",
         [inst("asus_client_info", "A"),
-         inst("asus_client_rssi_dbm * on (mac) group_left (ip) asus_client_info", "B")],
+         inst("asus_client_rssi_dbm * on (mac) group_left (ip, vendor, owner, type) asus_client_info", "B")],
         organize={"excludeByName": {**hide, "node": True, "Value #A": True},
                   "renameByName": {**names, "Value #B": "Signal"}, "indexByName": order},
         overrides=[signal], sort=("Mesh node", False),
@@ -445,6 +446,40 @@ def clients(links, netalertx_url) -> dict:
                 organize={"excludeByName": {**hide, "Value": True, "node": True},
                           "renameByName": {"hostname": "Name", "ip": "IP", "mac": "MAC"}},
                 sort=("IP", False)), 12, 10)
+
+    L.row("Presence & roaming")
+    L.add(stat("New devices (24h)", "count(max_over_time(asus_client_new[24h])) or vector(0)",
+               steps=thresholds((None, "green"), (1, "yellow")),
+               description="Devices the collector had never seen before. The collector's first poll after a fresh "
+                           "install is the baseline, so those devices don't count."), 4, 5)
+    L.add(stat("Roams (24h)", "sum(increase(asus_client_roams_total[24h])) or vector(0)", decimals=0,
+               description="Moves to another mesh node or band while connected."), 4, 5)
+    L.add(stat("Known devices offline", "count(asus_client_online == 0) or vector(0)",
+               description="Seen in the last CLIENT_RETENTION_DAYS days but not connected now."), 4, 5)
+    L.add(timeseries("Roams per hour", [target("sum(increase(asus_client_roams_total[1h]))", "roams")],
+                     "none", min_=0, fill=20, legend_calcs=("sum", "max")), 12, 5)
+    when = lambda name: override(name, unit="dateTimeFromNow")  # noqa: E731
+    L.add(table(
+        "Recent roams (24h)",
+        [inst("1000 * (asus_client_last_roam_timestamp_seconds > time() - 86400)", "A")],
+        organize={"excludeByName": hide,
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "from_node": "From node", "to_node": "To node",
+                                   "from_band": "From band", "to_band": "To band", "Value": "When"}},
+        overrides=[when("When")], sort=("When", True),
+        description="The latest roam of each device that roamed in the past day."), 12, 10)
+    L.add(table(
+        "Last seen",
+        [inst("asus_client_online", "A"), inst("1000 * asus_client_last_seen_timestamp_seconds", "B"),
+         inst("1000 * asus_client_first_seen_timestamp_seconds", "C")],
+        organize={"excludeByName": hide,
+                  "renameByName": {**names, "Value #A": "Online", "Value #B": "Last seen", "Value #C": "First seen"}},
+        overrides=[override("Online", mappings=UP_MAP, custom_cellOptions={"type": "color-text"}),
+                   when("Last seen"), when("First seen")],
+        sort=("Last seen", True),
+        description="Every device seen in the retention window, online or not."), 12, 10)
+    L.add(state_timeline("Online timeline",
+                         [target('asus_client_online{hostname!=""}', "{{hostname}}")],
+                         description="Named devices only (name them in the Asus app or devices.yml)."), 24, 12)
 
     L.row("Wi-Fi link details (from each node's radios)")
     L.add(table(
