@@ -1651,6 +1651,18 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "asus_wifi_client_snr_db",
+          "legendFormat": "",
+          "refId": "F",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -1678,7 +1690,8 @@
               "Value #B": "Tx rate",
               "Value #C": "Rx rate",
               "Value #D": "Connected",
-              "Value #E": "Download (10m avg)"
+              "Value #E": "Download (10m avg)",
+              "Value #F": "SNR"
             }
           }
         }
@@ -1726,6 +1739,54 @@
                     },
                     {
                       "value": -55,
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "SNR"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dB"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 15,
+                      "color": "orange"
+                    },
+                    {
+                      "value": 25,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 40,
                       "color": "green"
                     }
                   ]

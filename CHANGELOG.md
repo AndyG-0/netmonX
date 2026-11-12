@@ -21,5 +21,8 @@ under the new version when you cut a release.
 - Vendor label on `asus_client_info`: private (random) MACs always, maker names from an optional OUI file (`scripts/update-oui.sh`).
 - `devices.yml`: names, owners, types and per-device offline alerts by MAC.
 - Nine more alerts: node rebooted, temperature over 85 °C, connection table over 80%, memory under 10%, WAN IP changed, DHCP pool almost full (new `asus_dhcp_pool_size`), collector data stale, new device, known device offline.
+- Per-radio channel, width, DFS flag and noise floor, plus client SNR; Wi-Fi radios row on the Router & Mesh dashboard.
+- `asus_wifi_channel_changes_total`: channel or width changes per radio.
+- Channel utilization from `wl chanim_stats` (`asus_wifi_airtime_percent`).
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main

@@ -101,13 +101,19 @@ def slow_snapshot() -> Command:
 
 
 def wifi_snapshot(radios: list[str], vifs: list[str] = ()) -> Command:
-    """Per interface: SSID and associated clients with signal and rates. Radios also report temperature."""
+    """Per interface: SSID and associated clients with signal and rates.
+
+    Radios also report temperature, channel, noise floor and airtime (chanim_stats).
+    """
     radio_names = " ".join(safe_iface(i) for i in radios)
     all_names = " ".join(safe_iface(i) for i in [*radios, *vifs])
     return Command(
         "wifi_snapshot",
         f"for i in {radio_names}; do "
-        'echo "@@wl_temp $i"; wl -i $i phy_tempsense 2>/dev/null; done; '
+        'echo "@@wl_temp $i"; wl -i $i phy_tempsense 2>/dev/null; '
+        'echo "@@chanspec $i"; wl -i $i chanspec 2>/dev/null; '
+        'echo "@@noise $i"; wl -i $i noise 2>/dev/null; '
+        'echo "@@chanim $i"; wl -i $i chanim_stats 2>/dev/null; done; '
         f"for i in {all_names}; do "
         'echo "@@ssid $i"; wl -i $i ssid 2>/dev/null; '
         "for m in $(wl -i $i assoclist 2>/dev/null | awk '{print $2}'); do "

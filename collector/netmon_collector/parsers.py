@@ -387,11 +387,79 @@ def parse_ssid(text: str) -> str:
     return m.group(1) if m else ""
 
 
+@dataclass(frozen=True)
+class Chanspec:
+    raw: str  # as printed, e.g. "44/80"
+    channel: int
+    width_mhz: int
+    band: str  # "2.4 GHz", "5 GHz" or "6 GHz"
+
+    @property
+    def dfs(self) -> bool:
+        """5 GHz channels 52-144 need radar detection and can be forced to move."""
+        return self.band == "5 GHz" and 52 <= self.channel <= 144
+
+
+_CHANSPEC_RE = re.compile(r"^(6g)?(\d+)(?:(/\d+)|([lu]))?\s*(?:\((0x[0-9a-fA-F]+)\))?")
+
+
+def parse_chanspec(text: str) -> Chanspec | None:
+    """`wl chanspec`: "3 (0x1003)", "36l", "44/80 (0xe22a)", "6g37/160 (0x...)"."""
+    m = _CHANSPEC_RE.match(text.strip())
+    if not m:
+        return None
+    six, chan, slash, lu, hexs = m.groups()
+    channel = int(chan)
+    width = int(slash[1:]) if slash else 40 if lu else 20
+    if six:
+        band = "6 GHz"
+    elif hexs and int(hexs, 16) & 0xC000 == 0x8000:  # Broadcom 11ax chanspec band bits
+        band = "6 GHz"
+    else:
+        band = "2.4 GHz" if channel <= 14 else "5 GHz"
+    return Chanspec(m.group(0).split("(")[0].strip(), channel, width, band)
+
+
+def parse_noise(text: str) -> int | None:
+    m = re.search(r"-\d+", text)
+    return int(m.group(0)) if m else None
+
+
+CHANIM_STATS = ("tx", "inbss", "obss", "nocat", "nopkt", "doze", "txop", "goodtx", "badtx", "idle")
+
+
+def parse_chanim_stats(text: str) -> dict[str, float]:
+    """`wl chanim_stats`: a header row starting with "chanspec", then one row of percentages."""
+    lines = [line.split() for line in text.splitlines() if line.strip()]
+    for i, cols in enumerate(lines[:-1]):
+        if cols and cols[0] == "chanspec":
+            row = lines[i + 1]
+            if len(row) != len(cols):
+                return {}
+            out = {}
+            for k, v in zip(cols, row, strict=False):
+                if k in CHANIM_STATS:
+                    try:
+                        out[k] = float(v)
+                    except ValueError:
+                        pass
+            return out
+    return {}
+
+
+@dataclass
+class Radio:
+    chanspec: Chanspec | None = None
+    noise_dbm: int | None = None
+    chanim: dict[str, float] = field(default_factory=dict)
+
+
 @dataclass
 class WifiSnapshot:
     clients: list[WifiClient] = field(default_factory=list)
     temps: dict[str, float] = field(default_factory=dict)  # radio iface -> celsius
     ssids: dict[str, str] = field(default_factory=dict)  # iface -> SSID ("" if none)
+    radios: dict[str, Radio] = field(default_factory=dict)  # radio iface -> channel, noise, airtime
 
 
 def parse_wifi_snapshot(text: str) -> WifiSnapshot:
@@ -402,6 +470,14 @@ def parse_wifi_snapshot(text: str) -> WifiSnapshot:
             t = parse_phy_tempsense(body)
             if t is not None:
                 snap.temps[parts[1]] = t
+        elif parts[0] in ("chanspec", "noise", "chanim") and len(parts) == 2:
+            radio = snap.radios.setdefault(parts[1], Radio())
+            if parts[0] == "chanspec":
+                radio.chanspec = parse_chanspec(body)
+            elif parts[0] == "noise":
+                radio.noise_dbm = parse_noise(body)
+            else:
+                radio.chanim = parse_chanim_stats(body)
         elif parts[0] == "ssid" and len(parts) == 2:
             snap.ssids[parts[1]] = parse_ssid(body)
         elif parts[0] == "sta" and len(parts) == 3 and _MAC_RE.match(parts[2]):

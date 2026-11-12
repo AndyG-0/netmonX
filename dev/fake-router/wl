@@ -3,6 +3,11 @@
 iface=$2; cmd=$3; mac=$4
 case "$cmd" in
   phy_tempsense) echo "57 (0x39)" ;;
+  chanspec) [ "$iface" = eth4 ] && echo "6 (0x1006)" || echo "44/80 (0xe22a)" ;;
+  noise) echo "-88" ;;
+  chanim_stats)
+    printf 'version: 3 \nchanspec tx   inbss   obss   nocat   nopkt   doze     txop     goodtx  badtx   glitch   badplcp  knoise  idle  timestamp\n'
+    printf '0xe22a\t5\t1\t8\t2\t1\t0\t52\t1\t0\t30\t8\t-88\t57\t%s\n' "$(date +%s)" ;;
   assoclist)
     [ "$iface" = eth5 ] && { echo "assoclist 7C:D9:5C:11:22:33"; echo "assoclist A4:83:E7:44:55:66"; }
     [ "$iface" = eth4 ] && echo "assoclist 3C:22:FB:00:11:22"

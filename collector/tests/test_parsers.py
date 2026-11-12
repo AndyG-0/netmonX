@@ -169,3 +169,29 @@ def test_dhcp_pool_size():
     assert parsers.dhcp_pool_size("192.168.50.2", "192.168.50.254") == 253
     assert parsers.dhcp_pool_size("192.168.50.9", "192.168.50.2") is None
     assert parsers.dhcp_pool_size("", "192.168.50.254") is None
+
+
+@pytest.mark.parametrize(
+    "text,channel,width,band,dfs",
+    [
+        ("3 (0x1003)", 3, 20, "2.4 GHz", False),
+        ("44/80 (0xe22a)", 44, 80, "5 GHz", False),
+        ("100/160 (0xec72)", 100, 160, "5 GHz", True),
+        ("36l", 36, 40, "5 GHz", False),
+        ("6g37/160 (0x6f2f)", 37, 160, "6 GHz", False),
+        ("37/160 (0xaf2f)", 37, 160, "6 GHz", False),  # 6 GHz told apart by the chanspec band bits
+    ],
+)
+def test_parse_chanspec(text, channel, width, band, dfs):
+    cs = parsers.parse_chanspec(text)
+    assert (cs.channel, cs.width_mhz, cs.band, cs.dfs) == (channel, width, band, dfs)
+
+
+def test_radio_sections():
+    snap = parsers.parse_wifi_snapshot(fixture("wifi_snapshot.txt"))
+    eth4 = snap.radios["eth4"]
+    assert eth4.chanspec.raw == "3" and eth4.noise_dbm == -87
+    assert eth4.chanim["obss"] == 56 and eth4.chanim["idle"] == 32 and "knoise" not in eth4.chanim
+    assert snap.radios["eth5"].noise_dbm is None and snap.radios["eth6"].chanim == {}
+    assert parsers.parse_chanspec("wl: Unsupported") is None
+    assert parsers.parse_chanim_stats("chanspec tx idle\n0x1003 5") == {}

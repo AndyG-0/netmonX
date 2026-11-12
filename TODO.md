@@ -34,14 +34,17 @@ Effort: S = an evening, M = a weekend, L = bigger.
       long time without roaming, and 5 GHz-capable clients sitting on 2.4 GHz.
 
 ### Radio / RF
-- [ ] **Channel, width and noise per radio** (S) [UniFi RF environment, WiFiman]: `wl -i X chanspec`,
+- [x] **Channel, width and noise per radio** (S) [UniFi RF environment, WiFiman]: `wl -i X chanspec`,
       `wl -i X noise`. Export `asus_wifi_channel_info`, `asus_wifi_noise_dbm`, and SNR per client
       (RSSI minus noise).
-- [ ] **Channel utilization / interference** (M) [UniFi channel utilization]: `wl -i X chanim_stats` (busy %,
+      Done: `asus_wifi_radio_info{band,chanspec,dfs}`, `asus_wifi_channel`, `asus_wifi_channel_width_mhz`, `asus_wifi_noise_dbm`, and per-client `asus_wifi_client_snr_db`. Wi-Fi radios row on Router & Mesh. Verified against XT8 recon output.
+- [x] **Channel utilization / interference** (M) [UniFi channel utilization]: `wl -i X chanim_stats` (busy %,
       interference %, glitches). Check it on the real firmware with `router-recon.sh` first.
+      Done: `asus_wifi_airtime_percent{stat}` with the driver's tx/inbss/obss/nocat/nopkt/doze/txop/goodtx/badtx/idle shares (verified on the XT8: version 3 output, one row). "Busy" is shown as 100 - idle.
 - [ ] **Neighbouring networks** (M) [UniFi RF scan, WiFi Analyzer]: read cached `wl -i X scanresults` only, never
       `wl scan`. Count APs per channel to explain interference. Skip if the cache is empty on stock firmware.
-- [ ] **DFS / channel-change events** (S): count changes in the exported chanspec; annotate the dashboards.
+- [x] **DFS / channel-change events** (S): count changes in the exported chanspec; annotate the dashboards.
+      Done: `asus_wifi_channel_changes_total` (counted by the collector between polls) and a channel state timeline. Dashboard annotations come with the annotations item.
 
 ### Mesh
 - [ ] **Backhaul link quality** (M) [UniFi uplink / mesh view, eero]: RSSI, rate and band of each node's

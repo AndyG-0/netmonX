@@ -101,10 +101,54 @@ def ping_samples(node: str, target: str, role: str, result: parsers.PingResult) 
     ]
 
 
-def wifi_samples(node: str, text: str, bands: dict[str, str], hostnames: dict[str, str]) -> list[Sample | None]:
+def snr(rssi: float | None, noise: float | None) -> float | None:
+    if rssi is None or noise is None or rssi >= 0:
+        return None
+    return rssi - noise
+
+
+class ChannelTracker:
+    """Counts channel/width changes per radio between polls (DFS radar, auto channel, manual)."""
+
+    def __init__(self) -> None:
+        self.last: dict[str, str] = {}
+        self.changes: dict[str, int] = {}
+
+    def update(self, iface: str, chanspec: str) -> int:
+        prev = self.last.get(iface)
+        if prev is not None and prev != chanspec:
+            self.changes[iface] = self.changes.get(iface, 0) + 1
+            log.info("%s changed channel %s -> %s", iface, prev, chanspec)
+        self.last[iface] = chanspec
+        return self.changes.setdefault(iface, 0)
+
+
+def wifi_samples(
+    node: str,
+    text: str,
+    bands: dict[str, str],
+    hostnames: dict[str, str],
+    channels: ChannelTracker | None = None,
+) -> list[Sample | None]:
     """`bands` maps every polled interface (radios and virtual SSIDs) to its radio unit."""
     snap = parsers.parse_wifi_snapshot(text)
     out: list[Sample | None] = []
+    # Noise floor per radio unit, so clients on a guest SSID (wl0.1) get their radio's (wl0) noise.
+    unit_noise = {bands.get(iface, "wl?"): r.noise_dbm for iface, r in snap.radios.items() if r.noise_dbm is not None}
+    for iface, r in snap.radios.items():
+        lab = {"node": node, "iface": iface, "radio": bands.get(iface, "wl?")}
+        cs = r.chanspec
+        if cs:
+            out += [
+                sample("asus_wifi_radio_info", 1, **lab, band=cs.band, chanspec=cs.raw, dfs="1" if cs.dfs else "0"),
+                sample("asus_wifi_channel", cs.channel, **lab),
+                sample("asus_wifi_channel_width_mhz", cs.width_mhz, **lab),
+            ]
+            if channels is not None:
+                out.append(sample("asus_wifi_channel_changes", channels.update(iface, cs.raw), **lab))
+        out.append(sample("asus_wifi_noise_dbm", r.noise_dbm, **lab))
+        for stat, pct in r.chanim.items():
+            out.append(sample("asus_wifi_airtime_percent", pct, **lab, stat=stat))
     counts: dict[str, int] = {iface: 0 for iface in bands}
     for c in snap.clients:
         counts[c.iface] = counts.get(c.iface, 0) + 1
@@ -118,6 +162,7 @@ def wifi_samples(node: str, text: str, bands: dict[str, str], hostnames: dict[st
         }
         out += [
             sample("asus_wifi_client_rssi_dbm", c.rssi_dbm, **lab),
+            sample("asus_wifi_client_snr_db", snr(c.rssi_dbm, unit_noise.get(lab["radio"])), **lab),
             sample("asus_wifi_client_tx_rate_mbps", c.tx_rate_mbps, **lab),
             sample("asus_wifi_client_rx_rate_mbps", c.rx_rate_mbps, **lab),
             sample("asus_wifi_client_connected_seconds", c.connected_seconds, **lab),
@@ -295,6 +340,7 @@ class NodePoller:
         self.isp_hop: str | None = None if isp_hop_setting in ("auto", "none") else isp_hop_setting
         self._last_wan_ip: str | None = None
         self._ip_changes = 0
+        self.channels = ChannelTracker()
         self._errors: dict[str, int] = {}
         self._ping_totals: dict[str, list[int]] = {}  # target -> [sent, received]
         self._ok: dict[str, bool] = {}
@@ -361,7 +407,9 @@ class NodePoller:
         if self.wifi_bands or self.wifi_vifs:
             wifi = await self.conn.run(commands.wifi_snapshot(list(self.wifi_bands), list(self.wifi_vifs)))
             ifaces = {**self.wifi_bands, **self.wifi_vifs}
-            self.store.set(self.node, "wifi", wifi_samples(self.node, wifi, ifaces, self.shared.hostnames))
+            self.store.set(
+                self.node, "wifi", wifi_samples(self.node, wifi, ifaces, self.shared.hostnames, self.channels)
+            )
             self.shared.node_ssids[self.node] = ssid_keys(parsers.parse_wifi_snapshot(wifi), ifaces)
 
     async def _clients(self, nv: dict[str, str]) -> None:

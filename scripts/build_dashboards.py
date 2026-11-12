@@ -115,16 +115,20 @@ def timeseries(title, targets, unit="none", description="", stack=False, min_=No
     }
 
 
-def state_timeline(title, targets, description=""):
-    return {
-        "type": "state-timeline", "title": title, "description": description, "datasource": DS,
-        "targets": targets,
-        "fieldConfig": {"defaults": {
+def state_timeline(title, targets, description="", up_down=True):
+    if up_down:
+        defaults = {
             "mappings": [{"type": "value", "options": {
                 "0": {"text": "Down", "color": "red"}, "1": {"text": "Up", "color": "green"}}}],
             "thresholds": thresholds((None, "red"), (1, "green")),
-            "color": {"mode": "thresholds"}}, "overrides": []},
-        "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8},
+            "color": {"mode": "thresholds"}}
+    else:  # plain values (e.g. channel numbers), one colour per value
+        defaults = {"color": {"mode": "continuous-BlPu"}}
+    return {
+        "type": "state-timeline", "title": title, "description": description, "datasource": DS,
+        "targets": targets,
+        "fieldConfig": {"defaults": defaults, "overrides": []},
+        "options": {"showValue": "never" if up_down else "auto", "mergeValues": True, "rowHeight": 0.8},
     }
 
 
@@ -368,6 +372,49 @@ def router(links) -> dict:
                 f"rate(asus_net_transmit_drops_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} drops",
                 "B")],
         "pps", min_=0, fill=0), 8, 9)
+    L.row("Wi-Fi radios")
+    rinst = lambda expr, ref: target(expr, ref=ref, instant=True, table=True)  # noqa: E731
+    L.add(table(
+        "Radios",
+        [rinst(f"asus_wifi_radio_info{{{sel}}}", "A"), rinst(f"asus_wifi_channel_width_mhz{{{sel}}}", "B"),
+         rinst(f"asus_wifi_noise_dbm{{{sel}}}", "C"),
+         rinst(f'100 - asus_wifi_airtime_percent{{{sel}, stat="idle"}}', "D"),
+         rinst(f"increase(asus_wifi_channel_changes_total{{{sel}}}[24h])", "E")],
+        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "Value #A": True,
+                                    "stat": True},
+                  "renameByName": {"node": "Node", "iface": "Interface", "radio": "Radio", "band": "Band",
+                                   "chanspec": "Channel", "dfs": "DFS", "Value #B": "Width",
+                                   "Value #C": "Noise floor", "Value #D": "Busy", "Value #E": "Channel changes (24h)"}},
+        overrides=[override("Width", unit="MHz"), override("Noise floor", unit="dBm"),
+                   override("Busy", unit="percent", custom_cellOptions={"type": "color-text"},
+                            thresholds=thresholds((None, "green"), (50, "yellow"), (75, "red")),
+                            color={"mode": "thresholds"}),
+                   override("DFS", mappings=[{"type": "value", "options": {
+                       "0": {"text": "no"}, "1": {"text": "yes", "color": "orange"}}}]),
+                   override("Channel changes (24h)", decimals=0)],
+        sort=("Node", False),
+        description="From `wl chanspec`, `wl noise` and `wl chanim_stats` on each node. DFS channels (5 GHz 52-144) "
+                    "must move when the radio detects radar. Busy is 100 minus the driver's idle airtime share."),
+        24, 7)
+    L.add(timeseries(
+        "Airtime busy",
+        [target(f'100 - asus_wifi_airtime_percent{{{sel}, stat="idle"}}', "{{node}} {{iface}}")],
+        "percent", min_=0, fill=0,
+        description="Share of time the channel was not idle: our traffic, other networks and non-Wi-Fi noise."), 8, 8)
+    L.add(timeseries(
+        "Other networks on the channel",
+        [target(f'asus_wifi_airtime_percent{{{sel}, stat="obss"}}', "{{node}} {{iface}}")],
+        "percent", min_=0, fill=0,
+        description="`obss` airtime: frames from neighbouring networks on the same channel. High values mean "
+                    "a less crowded channel would help."), 8, 8)
+    L.add(timeseries(
+        "Noise floor", [target(f"asus_wifi_noise_dbm{{{sel}}}", "{{node}} {{iface}}")], "dBm", fill=0,
+        description="Lower (more negative) is better. A rise of 5-10 dB points at nearby interference."), 8, 8)
+    L.add(state_timeline(
+        "Channel", [target(f"asus_wifi_channel{{{sel}}}", "{{node}} {{iface}}")],
+        description="Primary channel per radio over time; a change is a DFS move, auto channel or a manual change.",
+        up_down=False),
+        24, 7)
     L.row("Collector")
     L.add(timeseries(
         "SSH command time (p95)",
@@ -486,13 +533,15 @@ def clients(links, netalertx_url) -> dict:
         "Wi-Fi link details",
         [inst("asus_wifi_client_rssi_dbm", "A"), inst("asus_wifi_client_tx_rate_mbps", "B"),
          inst("asus_wifi_client_rx_rate_mbps", "C"), inst("asus_wifi_client_connected_seconds", "D"),
-         inst("rate(asus_wifi_client_transmit_bytes_total[10m]) * 8", "E")],
+         inst("rate(asus_wifi_client_transmit_bytes_total[10m]) * 8", "E"), inst("asus_wifi_client_snr_db", "F")],
         organize={"excludeByName": {**hide, "iface": True},
                   "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "radio": "Radio",
                                    "ssid": "SSID", "Value #A": "Signal", "Value #B": "Tx rate",
                                    "Value #C": "Rx rate", "Value #D": "Connected",
-                                   "Value #E": "Download (10m avg)"}},
-        overrides=[signal, override("Tx rate", unit="Mbits"), override("Rx rate", unit="Mbits"),
+                                   "Value #E": "Download (10m avg)", "Value #F": "SNR"}},
+        overrides=[signal, override("SNR", unit="dB", custom_cellOptions={"type": "color-text"},
+                                    thresholds=thresholds((None, "red"), (15, "orange"), (25, "yellow"), (40, "green")),
+                                    color={"mode": "thresholds"}), override("Tx rate", unit="Mbits"), override("Rx rate", unit="Mbits"),
                    override("Connected", unit="s"), override("Download (10m avg)", unit="bps")],
         sort=("Signal", False),
         description="Link rate and traffic per Wi-Fi device, read with `wl` on each node that accepts SSH."),

@@ -80,6 +80,16 @@ def test_full_cycle_primary():
     assert 'asus_router_info{firmware="3.0.0.4.388_24353-g1a2b3c4"' in text
     assert 'hostname="Pixel-8"' in text
     assert 'asus_wifi_clients{iface="eth5",node="192.168.50.1",radio="wl1",ssid="HomeNet"} 0.0' in text
+    assert (
+        'asus_wifi_radio_info{band="5 GHz",chanspec="100/80",dfs="1",iface="eth5",node="192.168.50.1",radio="wl1"} 1.0'
+        in text
+    )
+    assert 'asus_wifi_noise_dbm{iface="eth4",node="192.168.50.1",radio="wl0"} -87.0' in text
+    assert 'asus_wifi_airtime_percent{iface="eth4",node="192.168.50.1",radio="wl0",stat="obss"} 56.0' in text
+    assert 'asus_wifi_channel_changes_total{iface="eth6",node="192.168.50.1",radio="wl2"} 0.0' in text
+    # eth6 client at -52 dBm over a -89 dBm noise floor
+    assert 'asus_wifi_client_snr_db{hostname="Pixel-8",iface="eth6",mac="7C:D9:5C:11:22:33",' in text
+    assert 'radio="wl2",ssid="HomeNet"} 37.0' in text
     assert 'asus_wifi_clients{iface="wl0.1",node="192.168.50.1",radio="wl0",ssid="HomeNet_Guest"} 0.0' in text
     assert 'iface="wl2.5"' not in text  # hidden backhaul with no clients
     # Mesh-wide client list: 6 devices, named nodes, guest SSIDs resolved.
@@ -160,3 +170,13 @@ def test_client_ssid_comes_from_the_nodes_own_radios():
     info = [dict(s.labels) for s in out if s and s.name == "asus_client_info"]
     ssids = {lab["mac"]: lab["ssid"] for lab in info}
     assert ssids == {"AA:00:00:00:00:01": "Guest", "AA:00:00:00:00:02": "Home"}
+
+
+def test_channel_tracker_counts_changes():
+    from netmon_collector.poller import ChannelTracker
+
+    t = ChannelTracker()
+    assert t.update("eth5", "44/80") == 0
+    assert t.update("eth5", "44/80") == 0
+    assert t.update("eth5", "100/80") == 1
+    assert t.update("eth4", "6") == 0

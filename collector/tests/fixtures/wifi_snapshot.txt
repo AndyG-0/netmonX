@@ -1,8 +1,24 @@
 @@wl_temp eth4
 58 (0x3a)
+@@chanspec eth4
+3 (0x1003)
+@@noise eth4
+-87
+@@chanim eth4
+version: 3 
+chanspec tx   inbss   obss   nocat   nopkt   doze     txop     goodtx  badtx   glitch   badplcp  knoise  idle  timestamp
+0x1003	35	0	56	2	7	0	2	0	5	654	22	-87	32	238738478
 @@wl_temp eth5
+@@chanspec eth5
+100/80 (0xe06a)
+@@noise eth5
 @@wl_temp eth6
 61 (0x3d)
+@@chanspec eth6
+165/80 (0xe0ab)
+@@noise eth6
+-89
+@@chanim eth6
 @@ssid eth4
 Current SSID: "HomeNet"
 @@ssid eth5
