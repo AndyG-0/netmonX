@@ -62,8 +62,10 @@ def test_ping_unreachable_counts_as_total_loss():
 def test_traceroute_and_isp_hop():
     hops = parsers.parse_traceroute(fixture("traceroute.txt"))
     assert [h.ttl for h in hops] == [1, 2, 3, 4, 5]
-    assert hops[0].ip == "73.12.34.1" and hops[0].rtt_ms == 8.412
-    assert hops[2].ip is None and hops[2].rtt_ms is None
+    assert hops[0].ip == "73.12.34.1" and hops[0].rtt_ms == 8.404 and hops[0].loss_ratio == 0
+    assert hops[1].sent == 3 and hops[1].rtts == [9.801, 10.199] and abs(hops[1].loss_ratio - 1 / 3) < 1e-9
+    assert hops[2].ip is None and hops[2].rtt_ms is None and hops[2].loss_ratio == 1
+    assert hops[3].ip == "68.86.90.1" and len(hops[3].rtts) == 3  # second router answered one probe
     assert parsers.pick_isp_hop("73.12.34.1", hops) == "73.12.34.1"
 
 

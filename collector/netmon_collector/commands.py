@@ -204,6 +204,6 @@ def ping(host: str, count: int = 5) -> Command:
     return Command("ping", f"{tool} -c {count} -w {count + 2} {host} 2>&1")
 
 
-def traceroute(host: str, max_hops: int = 5) -> Command:
-    max_hops = max(1, min(int(max_hops), 15))
-    return Command("traceroute", f"traceroute -n -m {max_hops} -w 1 -q 1 {safe_host(host)} 2>&1")
+def traceroute(host: str, max_hops: int = 5, probes: int = 3) -> Command:
+    max_hops, probes = max(1, min(int(max_hops), 15)), max(1, min(int(probes), 5))
+    return Command("traceroute", f"traceroute -n -m {int(max_hops)} -w 1 -q {int(probes)} {safe_host(host)} 2>&1")

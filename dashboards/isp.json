@@ -614,7 +614,7 @@
     {
       "type": "table",
       "title": "Route to first ping target (latest traceroute)",
-      "description": "",
+      "description": "3 probes per hop, every SLOW_INTERVAL. Many routers on the path don't answer traceroute at all (100% loss with no address): that is normal, not a fault.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -628,6 +628,18 @@
           "expr": "asus_traceroute_hop_rtt_ms",
           "legendFormat": "",
           "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "asus_traceroute_hop_loss_ratio",
+          "legendFormat": "",
+          "refId": "B",
           "instant": true,
           "range": false,
           "format": "table"
@@ -651,7 +663,8 @@
             "renameByName": {
               "hop": "Hop",
               "ip": "Address",
-              "Value": "RTT (ms)"
+              "Value #A": "RTT (ms)",
+              "Value #B": "Loss"
             }
           }
         }
@@ -663,7 +676,24 @@
             "filterable": true
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Loss"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -825,13 +855,127 @@
       }
     },
     {
-      "type": "row",
-      "title": "DNS & websites",
+      "type": "timeseries",
+      "title": "Latency per hop",
+      "description": "The first hop that gets slow, and stays slow for every hop after it, is where the delay starts.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (hop) (asus_traceroute_hop_rtt_ms)",
+          "legendFormat": "hop {{hop}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
       "id": 14,
-      "collapsed": false,
       "gridPos": {
         "x": 0,
         "y": 37,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Loss per hop (1h)",
+      "description": "Hops that never answer are left out. Loss at one hop that later hops don't show is just that router ignoring traceroute; loss that carries on to the last hop is real.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "1 - increase(asus_traceroute_hop_probes_received_total[1h]) / increase(asus_traceroute_hop_probes_sent_total[1h]) < 1",
+          "legendFormat": "hop {{hop}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 15,
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "DNS & websites",
+      "id": 16,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 45,
         "w": 24,
         "h": 1
       },
@@ -886,10 +1030,10 @@
           "sort": "desc"
         }
       },
-      "id": 15,
+      "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 46,
         "w": 12,
         "h": 8
       }
@@ -952,10 +1096,10 @@
           "sort": "desc"
         }
       },
-      "id": 16,
+      "id": 18,
       "gridPos": {
         "x": 12,
-        "y": 38,
+        "y": 46,
         "w": 12,
         "h": 8
       }

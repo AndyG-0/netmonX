@@ -378,11 +378,16 @@ def isp(links) -> dict:
     L.add(bloat_grade(), 4, 8)
     L.row("Path & addressing")
     L.add(table("Route to first ping target (latest traceroute)",
-                [target("asus_traceroute_hop_rtt_ms", ref="A", instant=True, table=True)],
+                [target("asus_traceroute_hop_rtt_ms", ref="A", instant=True, table=True),
+                 target("asus_traceroute_hop_loss_ratio", ref="B", instant=True, table=True)],
                 organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
                                             "node": True},
-                          "renameByName": {"hop": "Hop", "ip": "Address", "Value": "RTT (ms)"}},
-                sort=("Hop", False)), 8, 8)
+                          "renameByName": {"hop": "Hop", "ip": "Address", "Value #A": "RTT (ms)",
+                                           "Value #B": "Loss"}},
+                overrides=[override("Loss", unit="percentunit", decimals=0)],
+                sort=("Hop", False),
+                description="3 probes per hop, every SLOW_INTERVAL. Many routers on the path don't answer "
+                            "traceroute at all (100% loss with no address): that is normal, not a fault."), 8, 8)
     L.add(table("WAN details",
                 [target("asus_wan_info", ref="A", instant=True, table=True),
                  target("asus_isp_hop_info", ref="B", instant=True, table=True)],
@@ -393,6 +398,18 @@ def isp(links) -> dict:
                                            "wan_type": "Port"}}), 8, 8)
     L.add(timeseries("WAN IP changes per day", [target("increase(asus_wan_ip_changes_total[1d])", "changes")],
                      "none", min_=0), 8, 8)
+    L.add(timeseries(
+        "Latency per hop", [target("max by (hop) (asus_traceroute_hop_rtt_ms)", "hop {{hop}}")], "ms", min_=0,
+        fill=0, legend_calcs=("mean", "max"),
+        description="The first hop that gets slow, and stays slow for every hop after it, is where the delay starts."),
+        12, 8)
+    L.add(timeseries(
+        "Loss per hop (1h)",
+        [target("1 - increase(asus_traceroute_hop_probes_received_total[1h]) / "
+                "increase(asus_traceroute_hop_probes_sent_total[1h]) < 1", "hop {{hop}}")],
+        "percentunit", min_=0, fill=0, legend_calcs=("mean", "max"),
+        description="Hops that never answer are left out. Loss at one hop that later hops don't show is just "
+                    "that router ignoring traceroute; loss that carries on to the last hop is real."), 12, 8)
     L.row("DNS & websites")
     L.add(timeseries("DNS lookup time", [target('probe_duration_seconds{job="dns"}', "{{resolver}}")], "s",
                      min_=0, fill=0), 12, 8)

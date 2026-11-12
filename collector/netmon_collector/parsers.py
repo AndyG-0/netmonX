@@ -176,10 +176,21 @@ def parse_ping(text: str, expected: int) -> PingResult:
 class Hop:
     ttl: int
     ip: str | None
-    rtt_ms: float | None
+    rtt_ms: float | None  # average of the probes that came back
+    sent: int = 1
+    rtts: list[float] = field(default_factory=list)
+
+    @property
+    def loss_ratio(self) -> float:
+        return 1 - len(self.rtts) / self.sent if self.sent else 0.0
 
 
 def parse_traceroute(text: str) -> list[Hop]:
+    """Busybox `traceroute -q N`: per hop, an address then a time or `*` for each probe.
+
+    A probe answered by a different router prints that address before its time; the
+    hop keeps the first address.
+    """
     hops: list[Hop] = []
     for line in text.splitlines():
         m = re.match(r"^\s*(\d+)\s+(.*)$", line)
@@ -187,8 +198,11 @@ def parse_traceroute(text: str) -> list[Hop]:
             continue
         ttl, rest = int(m.group(1)), m.group(2)
         ip_m = _IPV4_RE.search(rest)
-        rtt_m = re.search(r"([\d.]+)\s*ms", rest)
-        hops.append(Hop(ttl, ip_m.group(1) if ip_m else None, float(rtt_m.group(1)) if rtt_m else None))
+        rtts = [float(x) for x in re.findall(r"([\d.]+)\s*ms", rest)]
+        sent = len(rtts) + rest.count("*")
+        hops.append(
+            Hop(ttl, ip_m.group(1) if ip_m else None, sum(rtts) / len(rtts) if rtts else None, max(sent, 1), rtts)
+        )
     return hops
 
 

@@ -497,6 +497,7 @@ class NodePoller:
         self.ipv6 = False
         self._errors: dict[str, int] = {}
         self._ping_totals: dict[str, list[int]] = {}  # target -> [sent, received]
+        self._hop_totals: dict[int, list[int]] = {}  # traceroute hop -> [probes sent, answered]
         self._ok: dict[str, bool] = {}
         self.metrics = SELF
 
@@ -705,9 +706,16 @@ class NodePoller:
         if self.ping_targets:
             hops = parsers.parse_traceroute(await self.conn.run(commands.traceroute(self.ping_targets[0])))
             for h in hops:
-                out.append(
-                    sample("asus_traceroute_hop_rtt_ms", h.rtt_ms, node=self.node, hop=str(h.ttl), ip=h.ip or "*")
-                )
+                lab = {"node": self.node, "hop": str(h.ttl)}
+                totals = self._hop_totals.setdefault(h.ttl, [0, 0])
+                totals[0] += h.sent
+                totals[1] += len(h.rtts)
+                out += [
+                    sample("asus_traceroute_hop_rtt_ms", h.rtt_ms, **lab, ip=h.ip or "*"),
+                    sample("asus_traceroute_hop_loss_ratio", h.loss_ratio, **lab, ip=h.ip or "*"),
+                    sample("asus_traceroute_hop_probes_sent", totals[0], **lab),
+                    sample("asus_traceroute_hop_probes_received", totals[1], **lab),
+                ]
         if self.isp_hop_setting == "auto":
             self.isp_hop = parsers.pick_isp_hop(nv.get("wan0_gateway"), hops)
         self.shared.isp_hop = self.isp_hop

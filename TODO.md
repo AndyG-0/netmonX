@@ -103,8 +103,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **Bufferbloat grade** (M) [Waveform, Ookla loaded latency]: compare idle latency with the loaded latency
       that speedtest-tracker reports, and grade A-F. Optionally run a ping series during the speed test.
       Done: Done: grade A+ to F (Waveform's thresholds) from Speedtest Tracker's loaded latency (IQM, worse of download/upload) minus idle ping. Tile on ISP & Internet and the report card, "added under load" line, recording rule `netmonx:bufferbloat_ms`. No extra ping series during the test (Speedtest Tracker already measures loaded latency).
-- [ ] **Per-hop path monitoring** (M) [PingPlotter, MTR]: run a traceroute every slow interval and keep loss and
+- [x] **Per-hop path monitoring** (M) [PingPlotter, MTR]: run a traceroute every slow interval and keep loss and
       latency per hop for the first few hops. This shows which hop starts losing packets.
+      Done: Done: traceroute now sends 3 probes per hop (`-q 3`); per hop `asus_traceroute_hop_rtt_ms` (average), `asus_traceroute_hop_loss_ratio` and probe counters `asus_traceroute_hop_probes_sent/received_total`. Latency and loss per hop panels on ISP & Internet. Checked on the real router: hops 3-5 never answer traceroute, so only the first two show data there.
 - [x] **Per-client LAN latency** (M) [UniFi client latency]: the collector serves an HTTP service-discovery
       endpoint (`/sd/clients`, `/sd/nodes`) and Prometheus probes clients with blackbox ICMP. Opt-in, rate-limited.
       Done: collector serves `/sd/nodes`, `/sd/dns`, `/sd/clients` (Prometheus HTTP SD). `lan_clients` blackbox ICMP job, opt-in with `LAN_CLIENT_PING=true`, once a minute, at most `LAN_CLIENT_PING_MAX` (50) online devices on the main LAN. Panels on Clients & Wi-Fi.

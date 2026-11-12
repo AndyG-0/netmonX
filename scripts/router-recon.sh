@@ -36,7 +36,7 @@ run slow_snapshot "$slow"
 ifaces=$(ssh "${ssh_opts[@]}" "$target" 'nvram get wl_ifnames')
 run wifi_snapshot "for i in $ifaces; do echo \"@@wl_temp \$i\"; wl -i \$i phy_tempsense 2>/dev/null; for m in \$(wl -i \$i assoclist 2>/dev/null | awk '{print \$2}'); do echo \"@@sta \$i \$m\"; wl -i \$i rssi \$m 2>/dev/null; wl -i \$i sta_info \$m 2>/dev/null; done; done"
 run ping_busybox 'ping -c 5 -w 7 1.1.1.1 2>&1'
-run traceroute 'traceroute -n -m 5 -w 1 -q 1 1.1.1.1 2>&1'
+run traceroute 'traceroute -n -m 5 -w 1 -q 3 1.1.1.1 2>&1'
 
 # Extra context to check the collector's assumptions.
 run uname 'uname -a; cat /proc/version'
