@@ -144,7 +144,8 @@ Effort: S = an evening, M = a weekend, L = bigger.
       Done: Done: `scripts/backup.sh` (stops the project's containers, tars each volume through a throwaway alpine container, optional `--live` and `--with-secrets`) and `scripts/restore.sh` (asks first, recreates missing volumes, never overwrites an existing .env/key). Tested with podman on a throwaway project.
 - [ ] **Long-term downsampling** (M): optional VictoriaMetrics in place of Prometheus, for years of data at low
       disk use.
-- [ ] **Setup wizard** (M): `scripts/setup.sh` writes `.env`, makes the key, and fills in IPs from recon output.
+- [x] **Setup wizard** (M): `scripts/setup.sh` writes `.env`, makes the key, and fills in IPs from recon output.
+      Done: Done: `scripts/setup.sh` (`--yes` takes defaults): detects TZ, gateway and host IP, generates the Grafana password and Speedtest key, makes the key and shows it, tests the login with `nvram get` only, writes router + mesh IPs from `cfg_device_list` into smokeping's config. Re-runnable; keeps existing values. Tested against the real router in a scratch copy (repo config not changed).
 - [x] **Repo hygiene** (S): `git init` and a CI workflow running `./dev.sh check`. Publish a multi-arch collector
       image (arm64 for a Pi/NAS). Done: `.github/workflows/`, `scripts/release.sh`.
 - [ ] **Support more models** (M): Asuswrt-Merlin firmware (more `nvram` keys, still no `/jffs` scripts); test

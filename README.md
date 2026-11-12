@@ -33,6 +33,11 @@ To check this yourself, run `nvram show | md5sum` on the router before and after
 
 ## Setup
 
+**Quick way:** after getting the files (step 3), run `scripts/setup.sh`. It asks a few questions, writes `.env`
+(generated Grafana password and Speedtest key), makes `secrets/router_key` and shows the public key to paste into the
+router, checks the login (`nvram get` only) and puts your router and mesh node IPs into `config/smokeping/config.yml`.
+Then go to step 4. The manual steps below do the same thing.
+
 ### 1. Router SSH (once)
 
 1. In the Asus web UI, go to **Administration → System**:
@@ -83,9 +88,7 @@ Edit `.env`:
 - `MESH_SSH=false` if your mesh nodes don't accept the key. They'll still be pinged from the LAN.
 - Remove `netalertx` from `COMPOSE_PROFILES` if you don't want device discovery.
 
-Next, edit the IPs in two config files:
-- `config/smokeping/config.yml`: your router and mesh node IPs. After the collector runs, add the ISP hop it found (shown in the Grafana *ISP* dashboard and as `asus_isp_hop_info`).
-- `config/prometheus/prometheus.yml` (job `dns`): your router's IP, if it isn't `192.168.50.1`.
+Next, edit `config/smokeping/config.yml`: your router and mesh node IPs. After the collector runs, add the ISP hop it found (shown in the Grafana *ISP* dashboard and as `asus_isp_hop_info`). Prometheus needs no IPs: the collector tells it the router, nodes and ISP hop to probe.
 
 If you changed the URLs in `.env`, rebuild the dashboards:
 ```sh
@@ -254,7 +257,7 @@ collector/            asus-collector image (Python 3.12, asyncssh, prometheus-cl
 config/               prometheus, smokeping, blackbox, grafana provisioning + alert rules
 dashboards/           generated Grafana JSON (from scripts/build_dashboards.py)
 scripts/              release.sh, changelog.sh, router-recon.sh, build_dashboards.py, dev-up.sh,
-                      backup.sh / restore.sh, update-oui.sh
+                      backup.sh / restore.sh, setup.sh, update-oui.sh
 .github/              CI, publish and release workflows, Dependabot
 dev.sh                local dev runner (collector on host, rest in containers)
 dev/                  fake router + dev overrides
