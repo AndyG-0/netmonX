@@ -107,6 +107,22 @@ services:
       - ./dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
 
+  # Weekly digest to ntfy (uptime, outages, latency, speed, new devices). Enable with COMPOSE_PROFILES=digest.
+  digest:
+    image: python:3.12-alpine3.22
+    restart: unless-stopped
+    command: ["python3", "/app/digest.py", "--schedule", "${DIGEST_SCHEDULE:-mon 08:00}"]
+    environment:
+      TZ: ${TZ:-UTC}
+      PROMETHEUS_URL: http://prometheus:9090
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+      DIGEST_DAYS: ${DIGEST_DAYS:-7}
+      DIGEST_NAMES: ${DIGEST_NAMES:-false}
+    volumes:
+      - ./scripts/digest.py:/app/digest.py:ro
+    profiles: ["digest"]
+
   # Device discovery and new-device alerts, with its own web UI on :20211.
   # Host networking is needed so ARP scans can see the LAN.
   netalertx:

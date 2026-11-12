@@ -98,9 +98,11 @@ set_env NETALERTX_URL "http://$host:20211"
 set_env SPEEDTEST_APP_URL "http://$host:$(get_env SPEEDTEST_PORT)"
 ask ISP_PLAN_DOWN "Download speed you pay for, Mbit/s (empty: skip)" "$(get_env ISP_PLAN_DOWN)"
 ask ISP_PLAN_UP "Upload speed you pay for, Mbit/s (empty: skip)" "$(get_env ISP_PLAN_UP)"
-if yesno "Start NetAlertX for device discovery? (needs host networking)" y; then
-  set_env COMPOSE_PROFILES netalertx
-else set_env COMPOSE_PROFILES ""; fi
+profiles=()
+yesno "Start NetAlertX for device discovery? (needs host networking)" y && profiles+=(netalertx)
+ask NTFY_URL "ntfy topic URL for a weekly digest (empty: no digest)" "$(get_env NTFY_URL)"
+[[ -n $NTFY_URL ]] && profiles+=(digest)
+set_env COMPOSE_PROFILES "$(IFS=,; echo "${profiles[*]-}")"
 
 info "Router SSH key"
 mkdir -p secrets

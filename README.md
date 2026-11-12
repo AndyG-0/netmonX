@@ -154,6 +154,16 @@ docker compose restart grafana
 
 You can also set up email or other contact points in the Grafana UI.
 
+### 7. Weekly digest (optional)
+
+`scripts/digest.py` sums up the last 7 days in a few lines: uptime and outages, typical and p95 latency, loss,
+median speed (and share of your plan), bufferbloat grade, devices online and new, node reboots and failed router
+logins. Run it by hand to see it (`python3 scripts/digest.py`, with `PROMETHEUS_URL` if Prometheus isn't on
+localhost:9090). To get it on your phone every week, set `NTFY_URL` (an [ntfy](https://ntfy.sh) topic, ideally on
+your own server or a long random topic name) and add `digest` to `COMPOSE_PROFILES` in `.env`, then
+`docker compose up -d`. `DIGEST_SCHEDULE` sets the time (default `mon 08:00`). Device names are left out unless
+`DIGEST_NAMES=true`.
+
 ### Upgrading
 
 1. Read the [release notes](https://github.com/AndyG-0/netmonX/releases). Config or dashboard changes show up there.
@@ -257,7 +267,7 @@ collector/            asus-collector image (Python 3.12, asyncssh, prometheus-cl
 config/               prometheus, smokeping, blackbox, grafana provisioning + alert rules
 dashboards/           generated Grafana JSON (from scripts/build_dashboards.py)
 scripts/              release.sh, changelog.sh, router-recon.sh, build_dashboards.py, dev-up.sh,
-                      backup.sh / restore.sh, setup.sh, update-oui.sh
+                      backup.sh / restore.sh, setup.sh, digest.py, update-oui.sh
 .github/              CI, publish and release workflows, Dependabot
 dev.sh                local dev runner (collector on host, rest in containers)
 dev/                  fake router + dev overrides
