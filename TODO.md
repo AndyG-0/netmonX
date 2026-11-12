@@ -140,7 +140,8 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **Kiosk / read-only view** (S): Grafana anonymous Viewer role for a wall display, plus a compact
       "status" dashboard.
       Done: *Status* dashboard (`netmonx-status`, big tiles + firing alerts, 1 min refresh) and `GRAFANA_ANONYMOUS` (default false) for anonymous Viewer access.
-- [ ] **Backup/restore script** (S): back up the Grafana and Prometheus volumes and speedtest-tracker's sqlite.
+- [x] **Backup/restore script** (S): back up the Grafana and Prometheus volumes and speedtest-tracker's sqlite.
+      Done: Done: `scripts/backup.sh` (stops the project's containers, tars each volume through a throwaway alpine container, optional `--live` and `--with-secrets`) and `scripts/restore.sh` (asks first, recreates missing volumes, never overwrites an existing .env/key). Tested with podman on a throwaway project.
 - [ ] **Long-term downsampling** (M): optional VictoriaMetrics in place of Prometheus, for years of data at low
       disk use.
 - [ ] **Setup wizard** (M): `scripts/setup.sh` writes `.env`, makes the key, and fills in IPs from recon output.

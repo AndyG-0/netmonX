@@ -160,6 +160,17 @@ You can also set up email or other contact points in the Grafana UI.
 
 To roll back, set the previous version and run the same commands.
 
+### Backup and restore
+
+`scripts/backup.sh` writes `backups/netmonx-backup-<date>.tar` with the Prometheus, Grafana, Speedtest Tracker
+(sqlite), collector state and NetAlertX volumes, plus `config/collector/devices.yml`. It stops the containers
+while it copies (a minute or two of missed scrapes) and starts them again; `--live` skips that, but the copy may
+then catch Prometheus or the sqlite database mid-write. `--with-secrets` also stores `.env` and `secrets/`, so keep
+that file private. Works with docker or podman.
+
+`scripts/restore.sh backups/netmonx-backup-<date>.tar` replaces the data in those volumes (it asks first; `--yes`
+skips the question). It never overwrites an existing `.env`, router key or `devices.yml`. Before upgrading, take a backup.
+
 ## Notes and caveats
 
 - **ISP hop:** with `ISP_HOP=auto`, the collector pings your WAN gateway. If that gateway is a private IP (the modem is in router mode), it pings the first ISP-side hop from traceroute instead. Some ISPs drop ICMP to their gateway, which looks like 100% loss. In that case, set `ISP_HOP=none` or pick a hop that answers.
@@ -242,7 +253,8 @@ Prereleases don't touch `CHANGELOG.md`; their notes come from Unreleased, and th
 collector/            asus-collector image (Python 3.12, asyncssh, prometheus-client)
 config/               prometheus, smokeping, blackbox, grafana provisioning + alert rules
 dashboards/           generated Grafana JSON (from scripts/build_dashboards.py)
-scripts/              release.sh, changelog.sh, router-recon.sh, build_dashboards.py, dev-up.sh
+scripts/              release.sh, changelog.sh, router-recon.sh, build_dashboards.py, dev-up.sh,
+                      backup.sh / restore.sh, update-oui.sh
 .github/              CI, publish and release workflows, Dependabot
 dev.sh                local dev runner (collector on host, rest in containers)
 dev/                  fake router + dev overrides
