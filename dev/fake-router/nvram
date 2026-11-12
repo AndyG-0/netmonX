@@ -1,6 +1,10 @@
 #!/bin/sh
-# Fake Asus nvram: read-only `nvram get KEY`. Anything else fails loudly.
-[ "$1" = "get" ] || { echo "fake nvram: only 'get' is supported" >&2; exit 1; }
+# Fake Asus nvram: read-only `nvram get KEY` and `nvram show`. Anything else fails loudly.
+if [ "$1" = "show" ]; then  # a few settings, enough for the config hash
+  printf 'productid=XT8-FAKE\nwl0_ssid=HomeNet\nsys_uptime_now=%s\n' "$(cut -d. -f1 /proc/uptime)"
+  exit 0
+fi
+[ "$1" = "get" ] || { echo "fake nvram: only 'get' and 'show' are supported" >&2; exit 1; }
 gw=$(ip route | awk '/default/ {print $3; exit}')
 ifc=$(ip route | awk '/default/ {print $5; exit}')
 case "$2" in

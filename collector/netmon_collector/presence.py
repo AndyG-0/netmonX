@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ class Seen:
     new: bool = False  # first seen after the baseline poll
     name: str = ""  # last known name, so offline devices keep theirs
     last_roam: dict | None = None  # {"ts", "from_node", "to_node", "from_band", "to_band"}
+    bands: list[str] = field(default_factory=list)  # every Wi-Fi band the device was seen on
 
 
 @dataclass
@@ -108,6 +109,10 @@ class ClientTracker:
                     "to_band": roam.to_band,
                 }
             seen.last_seen, seen.node, seen.band = now, node, band
+        for mac, (_, band) in attached.items():
+            seen = self.devices[mac]
+            if band and band not in seen.bands:
+                seen.bands = [*seen.bands, band]
         self.online = set(attached)
         self.baseline_done = True
         cutoff = now - self.retention

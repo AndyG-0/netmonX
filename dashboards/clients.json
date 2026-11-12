@@ -1663,6 +1663,30 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "asus_wifi_client_score",
+          "legendFormat": "",
+          "refId": "G",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "100 * asus_wifi_client_tx_retries_total / (asus_wifi_client_tx_packets_total + asus_wifi_client_tx_retries_total > 0)",
+          "legendFormat": "",
+          "refId": "H",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -1691,7 +1715,9 @@
               "Value #C": "Rx rate",
               "Value #D": "Connected",
               "Value #E": "Download (10m avg)",
-              "Value #F": "SNR"
+              "Value #F": "SNR",
+              "Value #G": "Score",
+              "Value #H": "Retries"
             }
           }
         }
@@ -1704,6 +1730,70 @@
           }
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Score"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "value": null,
+                      "color": "red"
+                    },
+                    {
+                      "value": 50,
+                      "color": "orange"
+                    },
+                    {
+                      "value": 70,
+                      "color": "yellow"
+                    },
+                    {
+                      "value": 85,
+                      "color": "green"
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "thresholds"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Retries"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1870,6 +1960,230 @@
     },
     {
       "type": "timeseries",
+      "title": "Wi-Fi experience by node",
+      "description": "0-100 per Wi-Fi device, worked out by the collector: 50% signal (-90 dBm scores 0, -50 dBm scores full), 30% link rate against what the channel width allows (2-stream Wi-Fi 6), 20% retries since the device connected (half of frames retried scores 0). Above 85 is great, below 50 is a poor link.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg by (node) (asus_wifi_client_score)",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "avg(asus_wifi_client_score)",
+          "legendFormat": "whole network",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "min",
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 26,
+      "gridPos": {
+        "x": 0,
+        "y": 87,
+        "w": 12,
+        "h": 9
+      }
+    },
+    {
+      "type": "table",
+      "title": "Sticky clients (weak signal for an hour, no roam)",
+      "description": "Devices that stayed below -75 dBm for the last hour on the same node. A closer node would serve them better: they hold on to a weak link instead of roaming. Turning Wi-Fi off and on, or moving the node, usually helps.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max_over_time(asus_wifi_client_rssi_dbm[1h]) < -75 and on(mac) asus_wifi_client_connected_seconds > 3600",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "iface": true,
+              "radio": true
+            },
+            "renameByName": {
+              "hostname": "Name",
+              "mac": "MAC",
+              "node": "Node",
+              "ssid": "SSID",
+              "Value": "Best signal (1h)"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Best signal (1h)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dBm"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 27,
+      "gridPos": {
+        "x": 12,
+        "y": 87,
+        "w": 6,
+        "h": 9
+      }
+    },
+    {
+      "type": "table",
+      "title": "On 2.4 GHz but 5 GHz capable",
+      "description": "Devices on 2.4 GHz now that have used 5 or 6 GHz before (within the device history). 2.4 GHz is slower and more crowded; these usually end up there from distance or smart-connect band steering.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "asus_client_info{band=\"2.4 GHz\"} * on(mac) group_left asus_client_5ghz_capable",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "Value": true,
+              "ip": true,
+              "connection": true,
+              "ssid_key": true,
+              "vendor": true,
+              "owner": true,
+              "type": true
+            },
+            "renameByName": {
+              "hostname": "Name",
+              "mac": "MAC",
+              "node": "Node",
+              "node_name": "Node name",
+              "band": "Band",
+              "ssid": "SSID"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 28,
+      "gridPos": {
+        "x": 18,
+        "y": 87,
+        "w": 6,
+        "h": 9
+      }
+    },
+    {
+      "type": "timeseries",
       "title": "Signal strength",
       "description": "",
       "datasource": {
@@ -1916,10 +2230,10 @@
           "sort": "desc"
         }
       },
-      "id": 26,
+      "id": 29,
       "gridPos": {
         "x": 0,
-        "y": 87,
+        "y": 96,
         "w": 12,
         "h": 10
       }
@@ -1973,10 +2287,10 @@
           "sort": "desc"
         }
       },
-      "id": 27,
+      "id": 30,
       "gridPos": {
         "x": 12,
-        "y": 87,
+        "y": 96,
         "w": 12,
         "h": 10
       }
@@ -1984,11 +2298,11 @@
     {
       "type": "row",
       "title": "Device ping (LAN_CLIENT_PING)",
-      "id": 28,
+      "id": 31,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 97,
+        "y": 106,
         "w": 24,
         "h": 1
       },
@@ -2044,10 +2358,10 @@
           "sort": "desc"
         }
       },
-      "id": 29,
+      "id": 32,
       "gridPos": {
         "x": 0,
-        "y": 98,
+        "y": 107,
         "w": 16,
         "h": 9
       }
@@ -2122,10 +2436,10 @@
         "showHeader": true,
         "cellHeight": "sm"
       },
-      "id": 30,
+      "id": 33,
       "gridPos": {
         "x": 16,
-        "y": 98,
+        "y": 107,
         "w": 8,
         "h": 9
       }
@@ -2137,10 +2451,10 @@
         "mode": "markdown",
         "content": "Full device inventory, new-device alerts and presence history are in **[NetAlertX](http://192.168.50.10:20211)**.\n\nNames come from the Asus app and DHCP. Name devices in the Asus app to make this page easier to read."
       },
-      "id": 31,
+      "id": 34,
       "gridPos": {
         "x": 0,
-        "y": 107,
+        "y": 116,
         "w": 24,
         "h": 3
       }

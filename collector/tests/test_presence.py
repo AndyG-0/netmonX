@@ -69,6 +69,7 @@ def test_presence_samples():
     ((roam, ts),) = labels(out, "asus_client_last_roam_timestamp_seconds")
     assert roam["from_node"] == "main" and roam["to_node"] == "Office" and ts == 200
     assert labels(out, "asus_device_offline_alert_hours") == [({"hostname": "Andy phone", "mac": A}, 12)]
+    assert labels(out, "asus_client_5ghz_capable") == [({"hostname": "Andy phone", "mac": A}, 1)]
     assert presence_samples(t, {}, now=200 + 3600) and not labels(presence_samples(t, {}, 3800), "asus_client_new")
 
 

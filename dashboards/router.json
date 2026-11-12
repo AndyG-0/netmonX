@@ -1403,6 +1403,121 @@
       }
     },
     {
+      "type": "stat",
+      "title": "Settings last changed",
+      "description": "When the collector saw the router's settings change: a hash of `nvram show` (taken on the router, values never leave it) without keys that change on their own. Empty until the first change after the collector started.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max(asus_config_last_change_timestamp_seconds) * 1000",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeFromNow",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "blue"
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "id": 19,
+      "gridPos": {
+        "x": 8,
+        "y": 63,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Settings changes (7d)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(asus_config_changes_total[7d]))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              },
+              {
+                "value": 1,
+                "color": "orange"
+              }
+            ]
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "id": 20,
+      "gridPos": {
+        "x": 12,
+        "y": 63,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
       "type": "table",
       "title": "Open ports",
       "description": "Port forwarding rules (set by you in the web UI) and UPnP mappings (opened by devices on their own). Each is a way in from the internet.",
@@ -1477,10 +1592,10 @@
         "showHeader": true,
         "cellHeight": "sm"
       },
-      "id": 19,
+      "id": 21,
       "gridPos": {
-        "x": 8,
-        "y": 63,
+        "x": 0,
+        "y": 71,
         "w": 16,
         "h": 8
       }
@@ -1608,10 +1723,10 @@
         "showHeader": true,
         "cellHeight": "sm"
       },
-      "id": 20,
+      "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 71,
+        "y": 79,
         "w": 16,
         "h": 8
       }
@@ -1674,10 +1789,10 @@
           "sort": "desc"
         }
       },
-      "id": 21,
+      "id": 23,
       "gridPos": {
         "x": 16,
-        "y": 71,
+        "y": 79,
         "w": 8,
         "h": 8
       }
@@ -1685,11 +1800,11 @@
     {
       "type": "row",
       "title": "Collector",
-      "id": 22,
+      "id": 24,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 79,
+        "y": 87,
         "w": 24,
         "h": 1
       },
@@ -1744,10 +1859,10 @@
           "sort": "desc"
         }
       },
-      "id": 23,
+      "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 80,
+        "y": 88,
         "w": 12,
         "h": 8
       }
@@ -1819,10 +1934,10 @@
           "sort": "desc"
         }
       },
-      "id": 24,
+      "id": 26,
       "gridPos": {
         "x": 12,
-        "y": 80,
+        "y": 88,
         "w": 12,
         "h": 8
       }

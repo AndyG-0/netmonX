@@ -358,6 +358,9 @@ class WifiClient:
     connected_seconds: int | None = None
     tx_bytes: int | None = None
     rx_bytes: int | None = None
+    tx_pkts: int | None = None  # unicast frames sent (first tries), since association
+    tx_retries: int | None = None
+    tx_failed: int | None = None  # gave up after all retries
 
 
 def parse_phy_tempsense(text: str) -> float | None:
@@ -390,6 +393,11 @@ def parse_sta(iface: str, mac: str, body: str) -> WifiClient:
     client.connected_seconds = _int_after(r"in network\s+(\d+)\s+seconds", body)
     client.tx_bytes = _int_after(r"tx total bytes:\s*(\d+)", body)
     client.rx_bytes = _int_after(r"rx data bytes:\s*(\d+)", body)
+    client.tx_pkts = _int_after(r"tx total pkts sent:\s*(\d+)", body)
+    client.tx_retries = _int_after(r"tx pkts retries:\s*(\d+)", body)
+    client.tx_failed = _int_after(r"tx pkts retry exhausted:\s*(\d+)", body)
+    if client.tx_failed is None:
+        client.tx_failed = _int_after(r"tx failures:\s*(\d+)", body)
     return client
 
 
@@ -712,3 +720,12 @@ def parse_wg(handshakes: str, transfer: str) -> list[WgPeer]:
             p = peers.setdefault((f[0], f[1]), WgPeer(f[0], f[1]))
             p.rx_bytes, p.tx_bytes = int(f[2]), int(f[3])
     return list(peers.values())
+
+
+def parse_config_hash(text: str) -> tuple[str, int | None] | None:
+    """`<md5>  -` then the key count. None if the router printed no hash."""
+    m = re.match(r"\s*([0-9a-f]{32})\b", text)
+    if not m:
+        return None
+    count = re.search(r"^\s*(\d+)\s*$", text[m.end() :], re.M)
+    return m.group(1), int(count.group(1)) if count else None

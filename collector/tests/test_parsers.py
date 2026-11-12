@@ -98,6 +98,7 @@ def test_wifi_snapshot():
     assert (a.iface, a.mac, a.rssi_dbm) == ("eth6", "7C:D9:5C:11:22:33", -52)
     assert a.tx_rate_mbps == 1201.0 and a.rx_rate_mbps == 864.8
     assert a.connected_seconds == 3612 and a.tx_bytes == 1123412341 and a.rx_bytes == 51234123
+    assert (a.tx_pkts, a.tx_retries, a.tx_failed) == (9000, 1000, 3)
     # `wl rssi` printed 0, so fall back to smoothed rssi.
     assert (b.iface, b.rssi_dbm, b.tx_bytes) == ("eth4", -71, None)
 
@@ -119,6 +120,7 @@ def test_commands_are_read_only():
         commands.wifi_snapshot(["eth4", "eth5"], ["wl0.1"]).text,
         commands.clients_snapshot().text,
         commands.security_snapshot().text,
+        commands.config_hash().text,
         commands.ping("1.1.1.1").text,
         commands.traceroute("1.1.1.1").text,
         commands.ping("2606:4700:4700::1111").text,
@@ -128,6 +130,8 @@ def test_commands_are_read_only():
             assert bad not in t
         # `service restart_x` changes the router; nvram key names like ipv6_service are fine.
         assert not re.search(r"(^|[\s;&|(`])service\s", t)
+        # On stock firmware `sh` is a Broadcom memory read/write tool, not a shell: never call it.
+        assert not re.search(r"(^|[\s;&|(`])(sh|sw|sb|fw|fh|fb)\s", t)
 
 
 def test_band_info():
@@ -221,3 +225,25 @@ def test_security_parsers():
     assert parsers.parse_openvpn_status(sec["openvpn 2"]) == []
     peers = parsers.parse_wg(sec["wg_handshakes"], sec["wg_transfer"])
     assert [(p.iface, p.handshake, p.rx_bytes) for p in peers] == [("wgs1", 1794460190, 1000), ("wgs1", 0, 0)]
+
+
+def test_config_hash():
+    assert parsers.parse_config_hash("97377d43e9aaedc8a08b1b743f0c5080  -\n4020\n") == (
+        "97377d43e9aaedc8a08b1b743f0c5080", 4020,
+    )  # fmt: skip
+    assert parsers.parse_config_hash("") is None and parsers.parse_config_hash("nvram: not found") is None
+    # Volatile keys are left out; real settings are kept.
+    vol = re.compile(commands.CONFIG_VOLATILE_KEYS)
+    for key in (
+        "sys_uptime_now",
+        "wan0_expires",
+        "cfg_device_list",
+        "wan0_state_t",
+        "login_timestamp",
+        "webs_state_info",
+        "wl0.1_expire",
+        "wan0_ipaddr",
+    ):
+        assert vol.match(f"{key}=x"), key
+    for key in ("wl0_ssid", "wl0_wpa_psk", "vts_rulelist", "sshd_enable", "time_zone", "filter_lw_time_x"):
+        assert not vol.match(f"{key}=x"), key

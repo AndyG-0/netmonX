@@ -205,6 +205,36 @@ def lan_cidr(ip: str, netmask: str) -> str:
         return ""
 
 
+# Wi-Fi score: link rate a good 2-stream Wi-Fi 6 client reaches at each channel width (Mbps).
+SCORE_RATE_REF = {20: 287, 40: 574, 80: 1201, 160: 2402, 320: 4804}
+
+
+def _clamp01(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+def wifi_score(
+    rssi: int | None,
+    tx_rate: float | None,
+    width_mhz: int | None,
+    tx_pkts: int | None,
+    tx_retries: int | None,
+) -> int | None:
+    """0-100: 50% signal (-90 dBm = 0, -50 dBm = 1), 30% link rate vs. what the channel width allows,
+    20% retries (none = 1, half of all frames retried = 0). Missing parts are left out and the
+    rest reweighted. Retries count since the client associated."""
+    parts: list[tuple[float, float]] = []
+    if rssi is not None and rssi < 0:
+        parts.append((0.5, _clamp01((rssi + 90) / 40)))
+    if tx_rate and width_mhz in SCORE_RATE_REF:
+        parts.append((0.3, _clamp01(tx_rate / SCORE_RATE_REF[width_mhz])))
+    if tx_pkts is not None and tx_retries is not None and tx_pkts + tx_retries > 0:
+        parts.append((0.2, _clamp01(1 - 2 * tx_retries / (tx_pkts + tx_retries))))
+    if not parts or parts[0][0] != 0.5:
+        return None  # no signal reading: not enough to go on
+    return round(100 * sum(w * v for w, v in parts) / sum(w for w, _ in parts))
+
+
 def snr(rssi: float | None, noise: float | None) -> float | None:
     if rssi is None or noise is None or rssi >= 0:
         return None
@@ -253,6 +283,9 @@ def wifi_samples(
         out.append(sample("asus_wifi_noise_dbm", r.noise_dbm, **lab))
         for stat, pct in r.chanim.items():
             out.append(sample("asus_wifi_airtime_percent", pct, **lab, stat=stat))
+    unit_width = {
+        bands.get(iface, "wl?"): r.chanspec.width_mhz for iface, r in snap.radios.items() if r.chanspec is not None
+    }
     counts: dict[str, int] = {iface: 0 for iface in bands}
     for c in snap.clients:
         counts[c.iface] = counts.get(c.iface, 0) + 1
@@ -272,6 +305,14 @@ def wifi_samples(
             sample("asus_wifi_client_connected_seconds", c.connected_seconds, **lab),
             sample("asus_wifi_client_transmit_bytes", c.tx_bytes, **lab),
             sample("asus_wifi_client_receive_bytes", c.rx_bytes, **lab),
+            sample("asus_wifi_client_tx_packets", c.tx_pkts, **lab),
+            sample("asus_wifi_client_tx_retries", c.tx_retries, **lab),
+            sample("asus_wifi_client_tx_failures", c.tx_failed, **lab),
+            sample(
+                "asus_wifi_client_score",
+                wifi_score(c.rssi_dbm, c.tx_rate_mbps, unit_width.get(lab["radio"]), c.tx_pkts, c.tx_retries),
+                **lab,
+            ),
         ]
     for iface, n in counts.items():
         ssid = snap.ssids.get(iface, "")
@@ -355,6 +396,8 @@ def presence_samples(
         out.append(sample("asus_client_last_seen_timestamp_seconds", seen.last_seen, **lab))
         out.append(sample("asus_client_first_seen_timestamp_seconds", seen.first_seen, **lab))
         out.append(sample("asus_client_roams", seen.roams, **lab))
+        if any(b.startswith(("5", "6")) for b in seen.bands):
+            out.append(sample("asus_client_5ghz_capable", 1, **lab))
         if seen.new and now - seen.first_seen < new_window:
             out.append(sample("asus_client_new", 1, **lab))
         if seen.last_roam:
@@ -391,7 +434,7 @@ def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], na
 
 
 # Store groups the slow loop fills; all are dropped if a slow poll fails.
-SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security"]
+SLOW_GROUPS = ["slow", "wifi", "clients", "presence", "security", "config"]
 
 # Sections every router returns; if one comes back empty or unparsable, it counts as a parse failure.
 FAST_REQUIRED = {
@@ -447,6 +490,9 @@ class NodePoller:
         self._last_wan_ip: str | None = None
         self._ip_changes = 0
         self.channels = ChannelTracker()
+        self._config_hash: str | None = None
+        self._config_changes = 0
+        self._config_changed_at: float | None = None
         self.dual_wan = False
         self.ipv6 = False
         self._errors: dict[str, int] = {}
@@ -521,6 +567,7 @@ class NodePoller:
             await self._clients(nv)
             security = await self.conn.run(commands.security_snapshot())
             self.store.set(self.node, "security", security_samples(self.node, nv, security, time.time()))
+            self.store.set(self.node, "config", self._config(await self.conn.run(commands.config_hash())))
         if self.wifi_bands or self.wifi_vifs:
             wifi = await self.conn.run(commands.wifi_snapshot(list(self.wifi_bands), list(self.wifi_vifs)))
             ifaces = {**self.wifi_bands, **self.wifi_vifs}
@@ -528,6 +575,26 @@ class NodePoller:
                 self.node, "wifi", wifi_samples(self.node, wifi, ifaces, self.shared.hostnames, self.channels)
             )
             self.shared.node_ssids[self.node] = ssid_keys(parsers.parse_wifi_snapshot(wifi), ifaces)
+
+    def _config(self, text: str) -> list[Sample | None]:
+        """Config drift: a hash of the router's settings; a change counts once per new hash."""
+        parsed = parsers.parse_config_hash(text)
+        if parsed is None:
+            if text.strip():
+                self.metrics.parse_failures.labels(self.node, "config_hash").inc()
+            return []
+        digest, keys = parsed
+        if self._config_hash is not None and digest != self._config_hash:
+            self._config_changes += 1
+            self._config_changed_at = time.time()
+            log.info("router settings changed (config hash %s -> %s)", self._config_hash[:8], digest[:8])
+        self._config_hash = digest
+        return [
+            sample("asus_config_hash_info", 1, node=self.node, hash=digest[:12]),
+            sample("asus_config_keys", keys, node=self.node),
+            sample("asus_config_changes", self._config_changes, node=self.node),
+            sample("asus_config_last_change_timestamp_seconds", self._config_changed_at, node=self.node),
+        ]
 
     async def _clients(self, nv: dict[str, str]) -> None:
         """Every device on the mesh, wired or Wi-Fi, from the main router's AiMesh client list."""

@@ -499,3 +499,29 @@ groups:
           severity: info
         annotations:
           summary: "{{ $$labels.node }}: the number of open ports changed (port forwarding or UPnP). Check the Security & VPN row on the Router dashboard."
+      - uid: config-changed
+        title: Router settings changed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum by (node) (increase(asus_config_changes_total[15m]))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $$labels.node }}: the router's settings changed. If that wasn't you (or a firmware update), check the web UI."

@@ -27,11 +27,13 @@ Effort: S = an evening, M = a weekend, L = bigger.
       Done: `config/collector/devices.yml` (`DEVICES_FILE`), reloaded on change; adds `owner`/`type` labels and `asus_device_offline_alert_hours`.
 - [ ] **Per-device drill-down dashboard** (M) [UniFi client page]: one `$mac` variable. Show signal, link rate,
       node/roam history, traffic, online timeline, DHCP lease and vendor.
-- [ ] **Wi-Fi experience score** (M) [UniFi "Wi-Fi Experience", Meraki]: a 0-100 score per client from RSSI,
+- [x] **Wi-Fi experience score** (M) [UniFi "Wi-Fi Experience", Meraki]: a 0-100 score per client from RSSI,
       tx/rx rate vs. the band's max, and retries (from `wl sta_info`). Show the per-node and network
       averages on Overview.
-- [ ] **Sticky / misplaced clients** (S) [UniFi insights]: list Wi-Fi clients that stay below -75 dBm for a
+      Done: `asus_wifi_client_score` (0-100: 50% signal, 30% link rate vs. channel width, 20% retries since association, from `wl sta_info`; formula in poller.wifi_score and the panel help). New `asus_wifi_client_tx_packets/retries/failures_total`. Network average on Overview, per node and per device on Clients & Wi-Fi.
+- [x] **Sticky / misplaced clients** (S) [UniFi insights]: list Wi-Fi clients that stay below -75 dBm for a
       long time without roaming, and 5 GHz-capable clients sitting on 2.4 GHz.
+      Done: two tables on Clients & Wi-Fi: below -75 dBm for an hour without reconnecting, and devices on 2.4 GHz that have used 5/6 GHz before (new `asus_client_5ghz_capable`, from the device history; the router doesn't report client band support directly).
 
 ### Radio / RF
 - [x] **Channel, width and noise per radio** (S) [UniFi RF environment, WiFiman]: `wl -i X chanspec`,
@@ -65,8 +67,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **IPv6** (M): `ipv6_service`, `ipv6_rtr_addr`, `ipv6_prefix` nvram; `ping6` targets from the router.
       Check IPv6 reachability on the ISP dashboard.
       Done: `asus_ipv6_info`, `asus_ipv6_enabled`; `ping6` to `ROUTER_PING6_TARGETS` (role `internet_v6`) only when IPv6 is on. Your router has IPv6 disabled, so the ping6 path is unverified.
-- [ ] **Config drift detection** (S) [Oxidized/RANCID]: hash `nvram show` with counters and timestamps left
+- [x] **Config drift detection** (S) [Oxidized/RANCID]: hash `nvram show` with counters and timestamps left
       out, export `asus_config_hash_info`, and alert when it changes. Builds on the README's md5sum tip.
+      Done: router-side `nvram show | grep -Ev <volatile keys> | sort | md5sum` (values never leave the router) → `asus_config_hash_info`, `asus_config_changes_total`, last-change time, *Router settings changed* alert (info). Volatile keys found by hashing all 4295 keys twice 15 min apart (only 4 changed) plus their key families; hash verified stable on the XT8. If it fires without a real change, add the key to `CONFIG_VOLATILE_KEYS` in commands.py.
 - [x] **Security exposure view** (M) [Firewalla, UniFi threat panel]: list port forwards (`vts_rulelist`),
       UPnP mappings (`/tmp/upnp.leases` or similar), WAN SSH/web access flags (`sshd_wan`, `misc_http_x`),
       and whether WPS is on. Alert if any of these become active.

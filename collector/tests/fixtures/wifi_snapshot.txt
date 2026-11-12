@@ -42,6 +42,9 @@ Current SSID: ""
 	 rx data bytes: 51234123
 	 rate of last tx pkt: 1201000 kbps - 1201000 kbps
 	 rate of last rx pkt: 864800 kbps
+	 tx total pkts sent: 9000
+	 tx pkts retries: 1000
+	 tx pkts retry exhausted: 3
 	 per antenna rssi of last rx data frame: -51 -53 0 0
 	 per antenna average rssi of rx data frames: -52 -54 0 0
 @@sta eth4 A4:83:E7:44:55:66

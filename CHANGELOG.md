@@ -33,6 +33,9 @@ under the new version when you cut a release.
 - Blackbox ICMP job for the router, mesh nodes and ISP gateway, discovered from the collector.
 - Dashboard annotations for WAN outages, reboots and WAN IP changes.
 - Status dashboard for wall displays; optional anonymous viewing with `GRAFANA_ANONYMOUS=true`.
+- Config drift: alert when the router's settings change (hash computed on the router).
+- Wi-Fi experience score per device, node and network; per-client retry counters.
+- Sticky and misplaced (2.4 GHz but 5 GHz capable) client tables.
 
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.

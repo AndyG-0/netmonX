@@ -164,6 +164,32 @@ def security_snapshot() -> Command:
     )
 
 
+# nvram keys that change on their own (clocks, leases, link and service state, AiMesh sync, update checks).
+# Found by hashing every key twice 15 minutes apart on an XT8, plus the families those keys belong to.
+CONFIG_VOLATILE_KEYS = (
+    "^("
+    "asus_device_list|cfg_device_list|cfg_(ob|re)count|sys_uptime_[a-z]+|rc_service[a-z_]*|"
+    "[A-Za-z0-9_.]*_(state|state_t|sbstate_t|auxstate_t|realip_state|realip_ip)|"
+    "[A-Za-z0-9_.]*_(time|timestamp|ts|ts_w|expire|expires|expire_tmp|lease|cnt|count)|"
+    "[A-Za-z0-9_.]*login[A-Za-z0-9_.]*|ntp_[a-z_]+|webs_[A-Za-z_]+|link_[a-z0-9]+|apps_state_[a-z]+|"
+    "(wan|wan[0-9]|ipv6|ipv61|lan|lan1)_(ipaddr|gateway|dns|get_dns|dhcp_lifetime|expires)|ddns_ipaddr|"
+    "sysstate_[a-z_]+|wandog_[a-z_]+|fb_[a-z_]+|amas_[a-z0-9_]+|ookla_[a-z_]+"
+    ")="
+)
+
+
+def config_hash() -> Command:
+    """Main router only: md5 of `nvram show` minus volatile keys, and the key count.
+
+    Hashed on the router, so no nvram value (passwords, Wi-Fi keys) ever leaves it.
+    """
+    return Command(
+        "config_hash",
+        f"nvram show 2>/dev/null | grep -Ev '{CONFIG_VOLATILE_KEYS}' | sort | md5sum; "
+        f"nvram show 2>/dev/null | grep -cEv '{CONFIG_VOLATILE_KEYS}'",
+    )
+
+
 def clients_snapshot() -> Command:
     """AiMesh's own client list (main router only): every device, wired or Wi-Fi, by node and band."""
     return Command("clients_snapshot", "cat /tmp/clientlist.json 2>/dev/null")

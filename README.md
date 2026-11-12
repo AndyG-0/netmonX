@@ -27,9 +27,9 @@ It shows:
 ## What the collector does on your router
 
 Nothing changes. The collector can only send the fixed set of commands in
-`collector/netmon_collector/commands.py`: `cat` of `/proc` files and the router's client list (`/tmp/clientlist.json`), `nvram get`, `ping`, `traceroute` and `wl` status queries. Every input (IPs, interface names) is validated before it reaches a command. The collector never runs `nvram set`/`commit`, never writes to `/jffs` and installs nothing. A test enforces this (`test_commands_are_read_only`).
+`collector/netmon_collector/commands.py`: `cat` of `/proc` files and the router's client list (`/tmp/clientlist.json`), `nvram get`, `nvram show` piped into `md5sum` (only the hash leaves the router), `ping`, `traceroute`, `wg show` (public keys only) and `wl` status queries. Every input (IPs, interface names) is validated before it reaches a command. The collector never runs `nvram set`/`commit`, never writes to `/jffs` and installs nothing. A test enforces this (`test_commands_are_read_only`).
 
-To check this yourself, run `nvram show | md5sum` on the router before and after a day of running. The two hashes should match, apart from counters the firmware updates on its own.
+To check this yourself, run `nvram show | md5sum` on the router before and after a day of running. The two hashes should match, apart from counters the firmware updates on its own. The collector does the same check for you: *Router settings changed* fires when the hash of your settings (minus keys that change on their own) moves, so you'd also see a change made by someone else.
 
 ## Setup
 
@@ -113,7 +113,7 @@ Speedtest Tracker serves its Prometheus metrics only after you enable them:
 
 ### 6. Alerts (optional)
 
-Grafana loads 19 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
+Grafana loads 20 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
 
 | Alert | Fires when |
 |---|---|
@@ -135,6 +135,7 @@ Grafana loads 19 alert rules from `config/grafana/provisioning/alerting/rules.ym
 | Firmware update available | the router's own update check found newer firmware (severity `info`) |
 | Router admin open to the internet | `sshd_enable` allows WAN or `misc_http_x` (web UI from WAN) is on (severity `critical`) |
 | Port forwards or UPnP mappings changed | the number of port forwards or UPnP mappings changed (severity `info`) |
+| Router settings changed | the hash of the router's settings changed (severity `info`) |
 | Known device offline | a device with `alert_offline_hours` in `devices.yml` has been gone that long |
 
 To get notified:

@@ -27,6 +27,7 @@ class FakeConn:
             "wifi_snapshot": "wifi_snapshot.txt",
             "clients_snapshot": "clientlist.json",
             "security_snapshot": "security_snapshot.txt",
+            "config_hash": "config_hash.txt",
             "ping": "ping_busybox.txt",
             "traceroute": "traceroute.txt",
         }[command.name]
@@ -61,7 +62,7 @@ def test_full_cycle_primary():
     poller, store, shared = make(conn)
 
     async def cycle():
-        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security"])
+        await poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
         await poller._guard("fast", poller.poll_fast, ["fast", "ping"])
 
@@ -136,9 +137,9 @@ def test_mesh_node_skips_wan_and_ping():
 def test_failure_drops_values_and_marks_down():
     conn = FakeConn()
     poller, store, _ = make(conn)
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config"]))
     conn.fail = True
-    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security"]))
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow", "wifi", "clients", "security", "config"]))
     text = render(store)
     assert 'asus_up{node="192.168.50.1"} 0.0' in text
     assert 'asus_poll_errors_total{loop="slow",node="192.168.50.1"} 1.0' in text
@@ -253,3 +254,13 @@ def test_security_samples():
     assert since[0]["real_address"] == "203.0.113.7" and since[0]["client"] == "laptop" and since[1] == 1794457200
     peers = {lab["peer"] for lab, _ in by_name["asus_wireguard_peer_last_handshake_timestamp_seconds"]}
     assert peers == {"AAAAexam"}  # the peer that never connected has no handshake time
+
+
+def test_wifi_score():
+    from netmon_collector.poller import wifi_score
+
+    assert wifi_score(-50, 1201, 80, 1000, 0) == 100
+    assert wifi_score(-90, 0.0, 80, 0, 0) == 0  # no rate or frames yet: signal only
+    # -70 dBm (0.5), half the 80 MHz rate (0.5), 10% retries (0.8): 0.25 + 0.15 + 0.16
+    assert wifi_score(-70, 600.5, 80, 900, 100) == 56
+    assert wifi_score(None, 1201, 80, 1, 0) is None

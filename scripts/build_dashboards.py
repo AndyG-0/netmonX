@@ -233,6 +233,13 @@ CPU_BUSY = (
 # --- dashboards -----------------------------------------------------------
 
 
+SCORE_STEPS = thresholds((None, "red"), (50, "orange"), (70, "yellow"), (85, "green"))
+SCORE_HELP = ("0-100 per Wi-Fi device, worked out by the collector: 50% signal (-90 dBm scores 0, -50 dBm "
+              "scores full), 30% link rate against what the channel width allows (2-stream Wi-Fi 6), 20% "
+              "retries since the device connected (half of frames retried scores 0). Above 85 is great, "
+              "below 50 is a poor link.")
+
+
 def overview(links) -> dict:
     L = Layout()
     L.add(stat("Internet", "max(asus_wan_up)", mappings=UP_MAP,
@@ -253,15 +260,17 @@ def overview(links) -> dict:
                description="Every device on the mesh, wired or Wi-Fi, from the main router's AiMesh client list."), 4, 4)
     L.add(stat("Wi-Fi devices", 'sum(asus_clients{connection="wifi"}) or vector(0)',
                description="Devices on Wi-Fi, on any node and any SSID (main, guest, IoT)."), 4, 4)
+    L.add(stat("Wi-Fi experience", "avg(asus_wifi_client_score)", decimals=0, steps=SCORE_STEPS,
+               graph=True, description=SCORE_HELP + " Per node: Clients & Wi-Fi dashboard."), 4, 4)
     L.add(stat("Mesh nodes up", "sum(asus_up)", description="Nodes the collector can reach over SSH.",
-               legend="", steps=thresholds((None, "orange"))), 4, 4)
+               legend="", steps=thresholds((None, "orange"))), 3, 4)
     L.add(stat("Router uptime", 'max(asus_router_uptime_seconds * on(node) group_left group by (node) (asus_router_info{role="primary"}))',
-               "s", decimals=0), 4, 4)
+               "s", decimals=0), 3, 4)
     L.add(stat("WAN IP", "asus_wan_info", legend="{{ip}}", text_mode="name", steps=thresholds((None, "blue")),
-               color_mode="none"), 4, 4)
+               color_mode="none"), 3, 4)
     L.add(stat("Router CPU", "(" + CPU_BUSY.format(sel="", sel0="")
                + ') * on(node) group_left group by (node) (asus_router_info{role="primary"})', "percentunit", decimals=0,
-               steps=thresholds((None, "green"), (0.7, "yellow"), (0.9, "red"))), 4, 4)
+               steps=thresholds((None, "green"), (0.7, "yellow"), (0.9, "red"))), 3, 4)
 
     L.add(timeseries(
         "Internet latency: router vs. LAN",
@@ -463,6 +472,13 @@ def router(links) -> dict:
                     "`webui_wan` (router admin reachable from the internet) should stay off. UPnP lets any "
                     "device open ports; WPS push-button/PIN pairing is a known weak spot."),
         8, 8)
+    L.add(stat("Settings last changed", "max(asus_config_last_change_timestamp_seconds) * 1000", "dateTimeFromNow",
+               steps=thresholds((None, "blue")),
+               description="When the collector saw the router's settings change: a hash of `nvram show` (taken on "
+                           "the router, values never leave it) without keys that change on their own. Empty "
+                           "until the first change after the collector started."), 4, 4)
+    L.add(stat("Settings changes (7d)", "sum(increase(asus_config_changes_total[7d]))", decimals=0,
+               steps=thresholds((None, "green"), (1, "orange"))), 4, 4)
     L.add(table(
         "Open ports",
         [rinst("asus_port_forward_info", "A"), rinst("asus_upnp_mapping_info", "B")],
@@ -611,19 +627,53 @@ def clients(links, netalertx_url) -> dict:
         "Wi-Fi link details",
         [inst("asus_wifi_client_rssi_dbm", "A"), inst("asus_wifi_client_tx_rate_mbps", "B"),
          inst("asus_wifi_client_rx_rate_mbps", "C"), inst("asus_wifi_client_connected_seconds", "D"),
-         inst("rate(asus_wifi_client_transmit_bytes_total[10m]) * 8", "E"), inst("asus_wifi_client_snr_db", "F")],
+         inst("rate(asus_wifi_client_transmit_bytes_total[10m]) * 8", "E"), inst("asus_wifi_client_snr_db", "F"),
+         inst("asus_wifi_client_score", "G"),
+         inst("100 * asus_wifi_client_tx_retries_total / (asus_wifi_client_tx_packets_total "
+              "+ asus_wifi_client_tx_retries_total > 0)", "H")],
         organize={"excludeByName": {**hide, "iface": True},
                   "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "radio": "Radio",
                                    "ssid": "SSID", "Value #A": "Signal", "Value #B": "Tx rate",
                                    "Value #C": "Rx rate", "Value #D": "Connected",
-                                   "Value #E": "Download (10m avg)", "Value #F": "SNR"}},
-        overrides=[signal, override("SNR", unit="dB", custom_cellOptions={"type": "color-text"},
+                                   "Value #E": "Download (10m avg)", "Value #F": "SNR", "Value #G": "Score",
+                                   "Value #H": "Retries"}},
+        overrides=[override("Score", decimals=0, custom_cellOptions={"type": "color-background"},
+                            thresholds=SCORE_STEPS, color={"mode": "thresholds"}),
+                   override("Retries", unit="percent", decimals=1),
+                   signal, override("SNR", unit="dB", custom_cellOptions={"type": "color-text"},
                                     thresholds=thresholds((None, "red"), (15, "orange"), (25, "yellow"), (40, "green")),
                                     color={"mode": "thresholds"}), override("Tx rate", unit="Mbits"), override("Rx rate", unit="Mbits"),
                    override("Connected", unit="s"), override("Download (10m avg)", unit="bps")],
         sort=("Signal", False),
         description="Link rate and traffic per Wi-Fi device, read with `wl` on each node that accepts SSH."),
         24, 12)
+    L.add(timeseries(
+        "Wi-Fi experience by node",
+        [target("avg by (node) (asus_wifi_client_score)", "{{node}}"),
+         target("avg(asus_wifi_client_score)", "whole network", "B")],
+        "none", min_=0, fill=0, legend_calcs=("mean", "min", "lastNotNull"),
+        description=SCORE_HELP), 12, 9)
+    L.add(table(
+        "Sticky clients (weak signal for an hour, no roam)",
+        [inst('max_over_time(asus_wifi_client_rssi_dbm[1h]) < -75 and on(mac) '
+              'asus_wifi_client_connected_seconds > 3600', "A")],
+        organize={"excludeByName": {**hide, "iface": True, "radio": True},
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "ssid": "SSID",
+                                   "Value": "Best signal (1h)"}},
+        overrides=[override("Best signal (1h)", unit="dBm")],
+        description="Devices that stayed below -75 dBm for the last hour on the same node. A closer node "
+                    "would serve them better: they hold on to a weak link instead of roaming. Turning Wi-Fi "
+                    "off and on, or moving the node, usually helps."), 6, 9)
+    L.add(table(
+        "On 2.4 GHz but 5 GHz capable",
+        [inst('asus_client_info{band="2.4 GHz"} * on(mac) group_left asus_client_5ghz_capable', "A")],
+        organize={"excludeByName": {**hide, "Value": True, "ip": True, "connection": True, "ssid_key": True,
+                                    "vendor": True, "owner": True, "type": True},
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "node_name": "Node name",
+                                   "band": "Band", "ssid": "SSID"}},
+        description="Devices on 2.4 GHz now that have used 5 or 6 GHz before (within the device history). "
+                    "2.4 GHz is slower and more crowded; these usually end up there from distance or "
+                    "smart-connect band steering."), 6, 9)
     L.add(timeseries("Signal strength", [target("asus_client_rssi_dbm", "{{hostname}} {{mac}}")],
                      "dBm", fill=0, legend_calcs=("lastNotNull", "min")), 12, 10)
     L.add(timeseries("Top Wi-Fi clients by traffic",
