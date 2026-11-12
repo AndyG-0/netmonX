@@ -163,3 +163,9 @@ def test_clientlist_and_dedupe():
 def test_custom_clientlist():
     value = "<Living room TV>a4:83:e7:44:55:66>0>0>>>><>11:22:33:44:55:66>0>0>>>><junk"
     assert parsers.parse_custom_clientlist(value) == {"A4:83:E7:44:55:66": "Living room TV"}
+
+
+def test_dhcp_pool_size():
+    assert parsers.dhcp_pool_size("192.168.50.2", "192.168.50.254") == 253
+    assert parsers.dhcp_pool_size("192.168.50.9", "192.168.50.2") is None
+    assert parsers.dhcp_pool_size("", "192.168.50.254") is None

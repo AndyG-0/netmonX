@@ -68,14 +68,16 @@ Effort: S = an evening, M = a weekend, L = bigger.
       where present.
 
 ### Alerts (add to config/grafana/provisioning/alerting/rules.yml)
-- [ ] Node rebooted (uptime went down) (S)
-- [ ] Temperature above threshold (S)
-- [ ] Conntrack > 80% of max; memory available < 10% (S)
-- [ ] WAN IP changed (S)
-- [ ] DHCP pool almost full (leases vs. `dhcp_start`/`dhcp_end`) (S)
-- [ ] Collector data stale (`time() - asus_last_poll_timestamp_seconds`) (S)
-- [ ] New device seen (collector-side, so it works without NetAlertX) (S)
-- [ ] Known device offline for N hours (opt-in per device via devices.yml) (S)
+- [x] Node rebooted (uptime went down) (S)
+- [x] Temperature above threshold (S)
+      Done: 85 °C for 10 minutes; edit the rule to suit your model.
+- [x] Conntrack > 80% of max; memory available < 10% (S)
+- [x] WAN IP changed (S)
+- [x] DHCP pool almost full (leases vs. `dhcp_start`/`dhcp_end`) (S)
+      Done: new `asus_dhcp_pool_size` gauge; fires above 90% for 15 minutes.
+- [x] Collector data stale (`time() - asus_last_poll_timestamp_seconds`) (S)
+- [x] New device seen (collector-side, so it works without NetAlertX) (S)
+- [x] Known device offline for N hours (opt-in per device via devices.yml) (S)
 
 ## P2: monitoring depth
 

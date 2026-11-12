@@ -55,6 +55,7 @@ METRICS: dict[str, tuple[str, str]] = {
     "asus_traceroute_hop_rtt_ms": ("gauge", "Round trip to each hop of the latest traceroute."),
     "asus_isp_hop_info": ("gauge", "Address used as the ISP's first hop (value is always 1)."),
     "asus_dhcp_leases": ("gauge", "Active DHCP leases."),
+    "asus_dhcp_pool_size": ("gauge", "Addresses in the DHCP pool (dhcp_start to dhcp_end)."),
     "asus_dhcp_lease_info": ("gauge", "One series per DHCP lease (value is always 1)."),
     "asus_arp_entries": ("gauge", "Devices with a complete ARP entry, per interface."),
     "asus_mesh_node_info": ("gauge", "AiMesh nodes known to the main router (value is always 1)."),

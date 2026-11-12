@@ -97,6 +97,7 @@ def test_full_cycle_primary():
     assert 'asus_router_temperature_celsius{node="192.168.50.1",sensor="radio_eth6"} 61.0' in text
     assert 'asus_traceroute_hop_rtt_ms{hop="3",ip="*",node="192.168.50.1"}' not in text  # no rtt -> no sample
     assert 'asus_dhcp_leases{node="192.168.50.1"} 2.0' in text
+    assert 'asus_dhcp_pool_size{node="192.168.50.1"} 253.0' in text
     # Presence: every device is online; the first poll is the baseline, so nothing is "new".
     assert text.count("asus_client_online{") == 6 and "asus_client_new{" not in text
     assert 'vendor="Private (random) MAC"' in text  # 5E:... is a locally administered MAC

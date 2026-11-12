@@ -12,7 +12,7 @@ It shows:
 - DNS lookup time (router vs 1.1.1.1 vs 8.8.8.8) and website reachability
 - Health of the router and each mesh node: CPU, memory, temperature, conntrack, uptime and reboots
 - Every device on the mesh: which node it's on, wired or Wi-Fi, band, SSID (including guest networks) and signal strength. Also link rates, DHCP leases and new-device alerts (NetAlertX)
-- Alerts (Grafana → ntfy or email) for WAN down, packet loss, high latency, an unreachable node and slow speed tests
+- Alerts (Grafana → ntfy or email) for WAN down, packet loss, high latency, an unreachable node, slow speed tests, reboots, heat, a full connection table or DHCP pool, low memory, a new WAN IP, new devices and devices you care about going offline
 
 | Service | What it does | Port |
 |---|---|---|
@@ -113,7 +113,27 @@ Speedtest Tracker serves its Prometheus metrics only after you enable them:
 
 ### 6. Alerts (optional)
 
-Grafana loads 6 alert rules from `config/grafana/provisioning/alerting/rules.yml`. To get notified:
+Grafana loads 15 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
+
+| Alert | Fires when |
+|---|---|
+| Router or mesh node not answering SSH | `asus_up` is 0 for 2 minutes |
+| WAN down | the router reports the WAN as down for 1 minute |
+| Internet packet loss above 2% | every internet ping target loses >2% for 5 minutes |
+| Internet latency over 2x normal | latency is over double its 24-hour average for 10 minutes |
+| LAN host not answering pings | the router or a mesh node stops answering smokeping |
+| Speed test under half of normal | the latest download is below half the 7-day median |
+| Router or mesh node rebooted | a node's uptime went down |
+| Router temperature above 85 °C | any sensor stays above 85 °C for 10 minutes (edit the threshold to suit your model) |
+| Connection table over 80% full | conntrack entries / max > 0.8 for 5 minutes |
+| Router memory below 10% | available RAM < 10% for 10 minutes |
+| WAN IP address changed | the public IP changed (severity `info`) |
+| DHCP pool almost full | leases > 90% of `dhcp_start`..`dhcp_end` for 15 minutes |
+| Collector data stale | no finished poll for 5 minutes, or no data at all |
+| New device on the network | the collector sees a MAC for the first time (severity `info`) |
+| Known device offline | a device with `alert_offline_hours` in `devices.yml` has been gone that long |
+
+To get notified:
 
 ```sh
 cp config/grafana/provisioning/alerting/contact-points.yml.example \

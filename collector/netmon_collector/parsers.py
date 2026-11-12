@@ -297,6 +297,15 @@ class ArpEntry:
     device: str
 
 
+def dhcp_pool_size(start: str, end: str) -> int | None:
+    """Addresses from dhcp_start to dhcp_end inclusive; None if either is missing or they're reversed."""
+    try:
+        a, b = int(ipaddress.IPv4Address(start.strip())), int(ipaddress.IPv4Address(end.strip()))
+    except ValueError:
+        return None
+    return b - a + 1 if b >= a else None
+
+
 def parse_proc_arp(text: str) -> list[ArpEntry]:
     """Complete entries from /proc/net/arp (flag 0x2 set)."""
     entries: list[ArpEntry] = []

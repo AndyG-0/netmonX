@@ -161,3 +161,237 @@ groups:
           severity: warning
         annotations:
           summary: "The latest download speed test is below half of the 7-day median."
+      - uid: node-rebooted
+        title: Router or mesh node rebooted
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (node) (resets(asus_router_uptime_seconds[10m]))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.node }} rebooted in the last 10 minutes (its uptime went down)."
+      - uid: temperature-high
+        title: Router temperature above 85 °C
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (node, sensor) (asus_router_temperature_celsius)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.node }} sensor {{ $$labels.sensor }} has been above 85 °C for 10 minutes. Check ventilation (some models report radio temperatures on a different scale)."
+      - uid: conntrack-high
+        title: Connection table over 80% full
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (node) (asus_router_conntrack_entries / asus_router_conntrack_max)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.8] }
+        for: 5m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.node }} is tracking more than 80% of its connection limit. New connections fail when it is full."
+      - uid: memory-low
+        title: Router memory below 10%
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min by (node) (asus_router_memory_available_bytes / asus_router_memory_total_bytes)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [0.1] }
+        for: 10m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.node }} has had less than 10% of its RAM available for 10 minutes."
+      - uid: wan-ip-changed
+        title: WAN IP address changed
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'sum(increase(asus_wan_ip_changes[10m]))'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: info
+        annotations:
+          summary: "The router got a new public IP address. Port forwards and dynamic DNS may need a moment to catch up."
+      - uid: dhcp-pool-full
+        title: DHCP pool almost full
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (node) (asus_dhcp_leases / asus_dhcp_pool_size)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+        for: 15m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 90% of the DHCP pool is leased. New devices may not get an address."
+      - uid: collector-stale
+        title: Collector data stale
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'time() - max by (loop) (asus_last_poll_timestamp_seconds{node=~".+"})'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [300] }
+        for: 0s
+        noDataState: Alerting
+        execErrState: Error
+        labels:
+          severity: critical
+        annotations:
+          summary: "The collector has not finished a {{ $$labels.loop }} poll in over 5 minutes (or Prometheus cannot scrape it)."
+      - uid: new-device
+        title: New device on the network
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (mac, hostname) (asus_client_new)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: info
+        annotations:
+          summary: "A device the collector has never seen joined: {{ $$labels.mac }} {{ $$labels.hostname }}."
+      - uid: known-device-offline
+        title: Known device offline
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: '(time() - max by (mac, hostname) (asus_client_last_seen_timestamp_seconds)) / 3600 - on (mac) group_left max by (mac) (asus_device_offline_alert_hours)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $$labels.hostname }} ({{ $$labels.mac }}) has been offline longer than its alert_offline_hours in devices.yml."

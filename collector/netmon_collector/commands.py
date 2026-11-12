@@ -39,6 +39,9 @@ NVRAM_KEYS = (
     "wl3_ifname",
     "cfg_device_list",
     "custom_clientlist",
+    # DHCP pool, for the "pool almost full" alert.
+    "dhcp_start",
+    "dhcp_end",
     # Virtual interfaces: guest networks, and the main SSIDs on mesh nodes.
     *(f"wl{u}_vifs" for u in range(4)),
     # SSID names, to label clients in clientlist.json (wlN = main, wlN.M = guest network M).

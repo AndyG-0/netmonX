@@ -422,6 +422,9 @@ class NodePoller:
         leases = parsers.parse_leases(sec.get("leases", ""))
         self.shared.hostnames = {lease.mac: lease.hostname for lease in leases if lease.hostname}
         out.append(sample("asus_dhcp_leases", len(leases), node=self.node))
+        pool = parsers.dhcp_pool_size(nv.get("dhcp_start", ""), nv.get("dhcp_end", ""))
+        if pool:
+            out.append(sample("asus_dhcp_pool_size", pool, node=self.node))
         for lease in leases:
             out.append(
                 sample("asus_dhcp_lease_info", 1, node=self.node, mac=lease.mac, ip=lease.ip, hostname=lease.hostname)

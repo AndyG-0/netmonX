@@ -9,6 +9,8 @@ case "$2" in
   buildno) echo 388 ;;
   extendno) echo 99999-fake ;;
   lan_ipaddr) echo 192.168.50.1 ;;
+  dhcp_start) echo 192.168.50.2 ;;
+  dhcp_end) echo 192.168.50.254 ;;
   lan_hwaddr) echo 02:00:00:aa:bb:01 ;;
   wan0_ifname) echo "$ifc" ;;
   wan0_proto) echo dhcp ;;
