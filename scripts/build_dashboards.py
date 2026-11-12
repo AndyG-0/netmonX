@@ -328,6 +328,22 @@ def overview(links) -> dict:
                           target("min(asus_up)", "router SSH", "B")]), 8, 8)
     return dashboard("netmonx-overview", "Network Overview", L, links)
 
+# Latency the last speed test added under load; same as netmonx:bufferbloat_ms in rules/isp.yml.
+BLOAT = (f"clamp_min((max({SPEED('download_latency_iqm_ms')}) > max({SPEED('upload_latency_iqm_ms')}) "
+         f"or max({SPEED('upload_latency_iqm_ms')})) - max({SPEED('ping_ms')}), 0)")
+BLOAT_HELP = ("Extra latency under load in the last speed test (worse of download and upload, minus idle ping). "
+              "Graded like Waveform's bufferbloat test: A+ up to 5 ms, A 30, B 60, C 200, D 400, F above. "
+              "B or worse means calls and games stutter while someone downloads; turning on QoS / Smart Queue "
+              "(Adaptive QoS on Asus) usually fixes it.")
+BLOAT_GRADES = [{"type": "range", "options": {"from": lo, "to": hi, "result": {"text": grade, "color": color}}}
+                for lo, hi, grade, color in [(0, 5, "A+", "green"), (5, 30, "A", "green"), (30, 60, "B", "yellow"),
+                                             (60, 200, "C", "orange"), (200, 400, "D", "red"),
+                                             (400, 1e9, "F", "dark-red")]]
+
+
+def bloat_grade(title="Bufferbloat"):
+    return stat(title, BLOAT, mappings=BLOAT_GRADES, color_mode="background", description=BLOAT_HELP)
+
 
 def isp(links) -> dict:
     L = Layout()
@@ -351,13 +367,15 @@ def isp(links) -> dict:
     L.add(timeseries("Speed test results",
                      [target(f"max({SPEED('download_bits')})", "download"),
                       target(f"max({SPEED('upload_bits')})", "upload", "B")],
-                     "bps", min_=0, fill=0, legend_calcs=("lastNotNull", "mean", "min")), 16, 8)
+                     "bps", min_=0, fill=0, legend_calcs=("lastNotNull", "mean", "min")), 12, 8)
     L.add(timeseries("Speed test latency",
                      [target(f"max({SPEED('ping_ms')})", "idle ping"),
                       target(f"max({SPEED('download_latency_iqm_ms')})", "loaded: download (IQM)", "B"),
-                      target(f"max({SPEED('upload_latency_iqm_ms')})", "loaded: upload (IQM)", "C")],
+                      target(f"max({SPEED('upload_latency_iqm_ms')})", "loaded: upload (IQM)", "C"),
+                      target(BLOAT, "added under load", "D")],
                      "ms", min_=0, fill=0,
                      description="A big rise under load points to bufferbloat."), 8, 8)
+    L.add(bloat_grade(), 4, 8)
     L.row("Path & addressing")
     L.add(table("Route to first ping target (latest traceroute)",
                 [target("asus_traceroute_hop_rtt_ms", ref="A", instant=True, table=True)],
@@ -416,14 +434,15 @@ def isp_report(links) -> dict:
     L.add(tile("Speed tests", f"changes((max({SPEED('result_id')}))[$__range:1m])", decimals=0,
                description="New Speedtest Tracker results in the time range."), 4, 5)
     vs = thresholds((None, "red"), (0.6, "orange"), (0.8, "green"))
-    L.add(tile("Median download", f"quantile_over_time(0.5, (max({down}))[$__range:5m])", "bps", decimals=0), 6, 5)
+    L.add(tile("Median download", f"quantile_over_time(0.5, (max({down}))[$__range:5m])", "bps", decimals=0), 5, 5)
     L.add(tile("Download vs. plan", f"quantile_over_time(0.5, (max({down}))[$__range:5m]) / on() {plan.format('download')}",
                "percentunit", decimals=0, steps=vs,
-               description="Median download over the plan speed (ISP_PLAN_DOWN in .env). Empty until it is set."), 6, 5)
-    L.add(tile("Median upload", f"quantile_over_time(0.5, (max({upl}))[$__range:5m])", "bps", decimals=0), 6, 5)
+               description="Median download over the plan speed (ISP_PLAN_DOWN in .env). Empty until it is set."), 5, 5)
+    L.add(tile("Median upload", f"quantile_over_time(0.5, (max({upl}))[$__range:5m])", "bps", decimals=0), 5, 5)
     L.add(tile("Upload vs. plan", f"quantile_over_time(0.5, (max({upl}))[$__range:5m]) / on() {plan.format('upload')}",
                "percentunit", decimals=0, steps=vs,
-               description="Median upload over the plan speed (ISP_PLAN_UP in .env). Empty until it is set."), 6, 5)
+               description="Median upload over the plan speed (ISP_PLAN_UP in .env). Empty until it is set."), 5, 5)
+    L.add(bloat_grade("Bufferbloat (last test)"), 4, 5)
 
     L.add(state_timeline("Internet connection", [target("max(asus_wan_up)", "WAN")]), 24, 4)
     daily = timeseries("Uptime per day", [target("avg_over_time((max(asus_wan_up))[1d:1m])", "uptime")],

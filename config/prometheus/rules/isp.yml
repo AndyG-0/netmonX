@@ -17,6 +17,13 @@ groups:
         expr: max(speedtest_tracker_download_bits)
       - record: netmonx:speedtest_upload_bits
         expr: max(speedtest_tracker_upload_bits)
+      # Bufferbloat: how much latency the last speed test added under load (worse of download and upload).
+      # Graded like Waveform's test: A+ <= 5 ms, A <= 30, B <= 60, C <= 200, D <= 400, F above.
+      - record: netmonx:bufferbloat_ms
+        expr: >-
+          clamp_min((max(speedtest_tracker_download_latency_iqm_ms) > max(speedtest_tracker_upload_latency_iqm_ms)
+          or max(speedtest_tracker_upload_latency_iqm_ms))
+          - max(speedtest_tracker_ping_ms), 0)
 
   - name: isp_report
     interval: 5m

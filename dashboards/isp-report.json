@@ -485,7 +485,7 @@
       "gridPos": {
         "x": 0,
         "y": 5,
-        "w": 6,
+        "w": 5,
         "h": 5
       }
     },
@@ -549,9 +549,9 @@
       },
       "id": 8,
       "gridPos": {
-        "x": 6,
+        "x": 5,
         "y": 5,
-        "w": 6,
+        "w": 5,
         "h": 5
       }
     },
@@ -607,9 +607,9 @@
       },
       "id": 9,
       "gridPos": {
-        "x": 12,
+        "x": 10,
         "y": 5,
-        "w": 6,
+        "w": 5,
         "h": 5
       }
     },
@@ -673,9 +673,132 @@
       },
       "id": 10,
       "gridPos": {
-        "x": 18,
+        "x": 15,
         "y": 5,
-        "w": 6,
+        "w": 5,
+        "h": 5
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Bufferbloat (last test)",
+      "description": "Extra latency under load in the last speed test (worse of download and upload, minus idle ping). Graded like Waveform's bufferbloat test: A+ up to 5 ms, A 30, B 60, C 200, D 400, F above. B or worse means calls and games stutter while someone downloads; turning on QoS / Smart Queue (Adaptive QoS on Asus) usually fixes it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clamp_min((max(speedtest_tracker_download_latency_iqm_ms) > max(speedtest_tracker_upload_latency_iqm_ms) or max(speedtest_tracker_upload_latency_iqm_ms)) - max(speedtest_tracker_ping_ms), 0)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "value": null,
+                "color": "green"
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 0,
+                "to": 5,
+                "result": {
+                  "text": "A+",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 5,
+                "to": 30,
+                "result": {
+                  "text": "A",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 30,
+                "to": 60,
+                "result": {
+                  "text": "B",
+                  "color": "yellow"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 60,
+                "to": 200,
+                "result": {
+                  "text": "C",
+                  "color": "orange"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 200,
+                "to": 400,
+                "result": {
+                  "text": "D",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "range",
+              "options": {
+                "from": 400,
+                "to": 1000000000.0,
+                "result": {
+                  "text": "F",
+                  "color": "dark-red"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "center"
+      },
+      "id": 11,
+      "gridPos": {
+        "x": 20,
+        "y": 5,
+        "w": 4,
         "h": 5
       }
     },
@@ -739,7 +862,7 @@
         "mergeValues": true,
         "rowHeight": 0.8
       },
-      "id": 11,
+      "id": 12,
       "gridPos": {
         "x": 0,
         "y": 10,
@@ -798,7 +921,7 @@
         }
       },
       "interval": "1d",
-      "id": 12,
+      "id": 13,
       "gridPos": {
         "x": 0,
         "y": 14,
@@ -883,7 +1006,7 @@
           "sort": "desc"
         }
       },
-      "id": 13,
+      "id": 14,
       "gridPos": {
         "x": 12,
         "y": 14,
@@ -949,7 +1072,7 @@
           "sort": "desc"
         }
       },
-      "id": 14,
+      "id": 15,
       "gridPos": {
         "x": 0,
         "y": 22,
@@ -1006,7 +1129,7 @@
           "sort": "desc"
         }
       },
-      "id": 15,
+      "id": 16,
       "gridPos": {
         "x": 12,
         "y": 22,
@@ -1021,7 +1144,7 @@
         "mode": "markdown",
         "content": "Pick the time range at the top (default: last 30 days), then print or export with **Share \u2192 Export \u2192 PDF** (or the browser's print). Uptime and outages come from the router's own WAN status, read every 15 seconds. Latency and loss are pings sent from the router to the internet targets (`ROUTER_PING_TARGETS`), so Wi-Fi can't skew them. Speeds are Speedtest Tracker results. Set `ISP_PLAN_DOWN` and `ISP_PLAN_UP` (Mbit/s) in .env to compare with what you pay for. The same 30-day numbers are kept as Prometheus recording rules (`netmonx:*`, see config/prometheus/rules/isp.yml) for alerts and scripts."
       },
-      "id": 16,
+      "id": 17,
       "gridPos": {
         "x": 0,
         "y": 30,

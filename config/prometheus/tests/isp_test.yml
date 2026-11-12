@@ -16,6 +16,12 @@ tests:
         values: '400000000x119'
       - series: 'netmonx_isp_plan_bits{direction="download"}'
         values: '500000000x119'
+      - series: 'speedtest_tracker_ping_ms{instance="s"}'
+        values: '12x119'
+      - series: 'speedtest_tracker_download_latency_iqm_ms{instance="s"}'
+        values: '40x119'
+      - series: 'speedtest_tracker_upload_latency_iqm_ms{instance="s"}'
+        values: '95x119'
     promql_expr_test:
       - expr: netmonx:wan_outages:30d
         eval_time: 119m
@@ -32,3 +38,6 @@ tests:
       - expr: netmonx:speedtest_upload:plan_ratio_30d
         eval_time: 119m
         exp_samples: []
+      - expr: netmonx:bufferbloat_ms
+        eval_time: 119m
+        exp_samples: [{labels: 'netmonx:bufferbloat_ms', value: 83}]

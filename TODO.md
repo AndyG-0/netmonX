@@ -100,8 +100,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
       Done: Done: *ISP report card* dashboard (`netmonx-isp-report`, any time range, default 30 days, printable) and 30-day recording rules in `config/prometheus/rules/isp.yml` (`netmonx:wan_uptime:ratio_30d`, `:wan_outages:30d`, `:wan_downtime_minutes:30d`, p95 latency, loss, median speeds, plan ratio) with promtool unit tests. Plan speed from `ISP_PLAN_DOWN`/`ISP_PLAN_UP` (Mbit/s) via the collector's `netmonx_isp_plan_bits`.
 - [x] **Outage annotations** (S): Grafana annotations for WAN down/up, node reboots and WAN IP changes.
       Done: Prometheus annotations on every dashboard: WAN down (red), node reboots (orange, from uptime resets), WAN IP changes (blue). Toggle them at the top of each dashboard.
-- [ ] **Bufferbloat grade** (M) [Waveform, Ookla loaded latency]: compare idle latency with the loaded latency
+- [x] **Bufferbloat grade** (M) [Waveform, Ookla loaded latency]: compare idle latency with the loaded latency
       that speedtest-tracker reports, and grade A-F. Optionally run a ping series during the speed test.
+      Done: Done: grade A+ to F (Waveform's thresholds) from Speedtest Tracker's loaded latency (IQM, worse of download/upload) minus idle ping. Tile on ISP & Internet and the report card, "added under load" line, recording rule `netmonx:bufferbloat_ms`. No extra ping series during the test (Speedtest Tracker already measures loaded latency).
 - [ ] **Per-hop path monitoring** (M) [PingPlotter, MTR]: run a traceroute every slow interval and keep loss and
       latency per hop for the first few hops. This shows which hop starts losing packets.
 - [x] **Per-client LAN latency** (M) [UniFi client latency]: the collector serves an HTTP service-discovery
