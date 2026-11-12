@@ -607,7 +607,9 @@
               "gateway": "Gateway",
               "dns": "ISP DNS",
               "proto": "Type",
-              "iface": "Interface"
+              "iface": "Interface",
+              "wan": "WAN",
+              "wan_type": "Port"
             }
           }
         }

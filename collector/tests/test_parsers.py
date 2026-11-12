@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -119,10 +120,13 @@ def test_commands_are_read_only():
         commands.clients_snapshot().text,
         commands.ping("1.1.1.1").text,
         commands.traceroute("1.1.1.1").text,
+        commands.ping("2606:4700:4700::1111").text,
     ]
     for t in texts:
-        for bad in ("nvram set", "nvram commit", "nvram unset", "rm ", "reboot", "service ", ">/jffs", "> /"):
+        for bad in ("nvram set", "nvram commit", "nvram unset", "rm ", "reboot", ">/jffs", "> /"):
             assert bad not in t
+        # `service restart_x` changes the router; nvram key names like ipv6_service are fine.
+        assert not re.search(r"(^|[\s;&|(`])service\s", t)
 
 
 def test_band_info():

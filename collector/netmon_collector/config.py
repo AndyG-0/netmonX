@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .commands import safe_host
 
@@ -44,6 +44,7 @@ class Config:
     devices_file: str | None = None  # devices.yml: names, owners, types, offline alerts
     oui_file: str | None = None  # Wireshark `manuf` file for MAC vendor names
     client_retention_days: float = 30
+    ping6_targets: list[str] = field(default_factory=list)  # used only if the router has IPv6 on
 
     @classmethod
     def from_env(cls) -> Config:
@@ -68,6 +69,12 @@ class Config:
         targets = _list("ROUTER_PING_TARGETS", "1.1.1.1,8.8.8.8")
         for t in targets:
             safe_host(t)
+        targets6 = _list("ROUTER_PING6_TARGETS", "2606:4700:4700::1111,2001:4860:4860::8888")
+        if targets6 in (["none"], ["off"]):
+            targets6 = []
+        for t in targets6:
+            if ":" not in safe_host(t):
+                raise ValueError(f"ROUTER_PING6_TARGETS must be IPv6 addresses: {t!r}")
         return cls(
             router_host=safe_host(host),
             router_port=int(_env("ROUTER_PORT", "22")),
@@ -75,6 +82,7 @@ class Config:
             key_path=_env("ROUTER_KEY_PATH", "/run/secrets/router_key"),
             known_hosts=known_hosts,
             ping_targets=targets,
+            ping6_targets=targets6,
             ping_count=int(_env("PING_COUNT", "5")),
             isp_hop=isp_hop,
             mesh_nodes=mesh,

@@ -42,6 +42,23 @@ NVRAM_KEYS = (
     # DHCP pool, for the "pool almost full" alert.
     "dhcp_start",
     "dhcp_end",
+    # Firmware check result from the router's own update checker (no request is made by us).
+    "webs_state_update",
+    "webs_state_info",
+    "webs_state_flag",
+    # Dual WAN: second WAN and the failover mode.
+    "wans_dualwan",
+    "wans_mode",
+    "wan1_ifname",
+    "wan1_proto",
+    "wan1_ipaddr",
+    "wan1_gateway",
+    "wan1_dns",
+    # IPv6 settings.
+    "ipv6_service",
+    "ipv6_rtr_addr",
+    "ipv6_prefix",
+    "ipv6_prefix_length",
     # Virtual interfaces: guest networks, and the main SSIDs on mesh nodes.
     *(f"wl{u}_vifs" for u in range(4)),
     # SSID names, to label clients in clientlist.json (wlN = main, wlN.M = guest network M).
@@ -83,7 +100,7 @@ def fast_snapshot() -> Command:
         "echo @@stat; head -n 1 /proc/stat; "
         "echo @@conntrack; cat /proc/sys/net/netfilter/nf_conntrack_count "
         "/proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null; "
-        "echo @@wan_state; nvram get wan0_state_t; nvram get link_wan",
+        "echo @@wan_state; nvram get wan0_state_t; nvram get link_wan; nvram get wan1_state_t; nvram get link_wan1",
     )
 
 
@@ -130,7 +147,10 @@ def clients_snapshot() -> Command:
 def ping(host: str, count: int = 5) -> Command:
     count = max(1, min(int(count), 20))
     # -w caps total runtime so a dead WAN can't stall the loop.
-    return Command("ping", f"ping -c {count} -w {count + 2} {safe_host(host)} 2>&1")
+    host = safe_host(host)
+    # Busybox `ping` is IPv4-only on stock firmware; `ping6` is a separate applet.
+    tool = "ping6" if ":" in host else "ping"
+    return Command("ping", f"{tool} -c {count} -w {count + 2} {host} 2>&1")
 
 
 def traceroute(host: str, max_hops: int = 5) -> Command:

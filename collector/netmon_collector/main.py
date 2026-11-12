@@ -29,6 +29,7 @@ def _poller(cfg: Config, host: str, store: Store, shared: SharedState, primary: 
         shared,
         is_primary=primary,
         ping_targets=cfg.ping_targets,
+        ping6_targets=cfg.ping6_targets,
         ping_count=cfg.ping_count,
         isp_hop_setting=cfg.isp_hop,
         fast_interval=cfg.fast_interval,

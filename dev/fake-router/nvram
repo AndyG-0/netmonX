@@ -11,6 +11,11 @@ case "$2" in
   lan_ipaddr) echo 192.168.50.1 ;;
   dhcp_start) echo 192.168.50.2 ;;
   dhcp_end) echo 192.168.50.254 ;;
+  webs_state_update) echo 1 ;;
+  webs_state_info) echo 3004_388_99999-fake ;;
+  webs_state_flag) echo 0 ;;
+  wans_dualwan) echo "wan none" ;;
+  ipv6_service) echo disabled ;;
   lan_hwaddr) echo 02:00:00:aa:bb:01 ;;
   wan0_ifname) echo "$ifc" ;;
   wan0_proto) echo dhcp ;;

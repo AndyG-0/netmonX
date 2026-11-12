@@ -127,6 +127,18 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "asus_firmware_update_available",
+          "legendFormat": "",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -151,7 +163,9 @@
               "mac": "MAC",
               "role": "Role",
               "Value #B": "Uptime",
-              "Value #C": "Reachable"
+              "Value #C": "Reachable",
+              "latest": "Latest firmware",
+              "Value #D": "Update"
             }
           }
         }
@@ -173,6 +187,38 @@
               {
                 "id": "unit",
                 "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Update"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "up to date",
+                        "color": "green"
+                      },
+                      "1": {
+                        "text": "available",
+                        "color": "orange"
+                      }
+                    }
+                  }
+                ]
               }
             ]
           },

@@ -41,7 +41,9 @@ def ssid_keys(snap: parsers.WifiSnapshot, ifaces: dict[str, str]) -> dict[str, s
 # --- sample builders (pure) -----------------------------------------------
 
 
-def fast_samples(node: str, text: str, wan_iface: str | None, is_primary: bool) -> list[Sample | None]:
+def fast_samples(
+    node: str, text: str, wan_iface: str | None, is_primary: bool, dual_wan: bool = False
+) -> list[Sample | None]:
     sec = parsers.section_map(text)
     out: list[Sample | None] = []
     for iface, c in parsers.parse_net_dev(sec.get("net_dev", "")).items():
@@ -82,11 +84,16 @@ def fast_samples(node: str, text: str, wan_iface: str | None, is_primary: bool) 
     if len(ct) > 1:
         out.append(sample("asus_router_conntrack_max", ct[1], node=node))
     if is_primary:
-        state = sec.get("wan_state", "").split()
-        if state:
-            out.append(sample("asus_wan_up", 1 if state[0] == "2" else 0, node=node))
-        if len(state) > 1:
-            out.append(sample("asus_wan_link_up", 1 if state[1] == "1" else 0, node=node))
+        # wan0 state and link, then wan1's (only meaningful with dual WAN on).
+        state = sec.get("wan_state", "").splitlines()
+        for wan in ("0", "1") if dual_wan else ("0",):
+            i = 2 * int(wan)
+            st = state[i].strip() if len(state) > i else ""
+            link = state[i + 1].strip() if len(state) > i + 1 else ""
+            if st:
+                out.append(sample("asus_wan_up", 1 if st == "2" else 0, node=node, wan=wan))
+            if link:
+                out.append(sample("asus_wan_link_up", 1 if link == "1" else 0, node=node, wan=wan))
     return out
 
 
@@ -323,6 +330,7 @@ class NodePoller:
         isp_hop_setting: str,
         fast_interval: float,
         slow_interval: float,
+        ping6_targets: list[str] = (),
     ) -> None:
         self.node = node
         self.conn = conn
@@ -330,6 +338,7 @@ class NodePoller:
         self.shared = shared
         self.is_primary = is_primary
         self.ping_targets = ping_targets
+        self.ping6_targets = list(ping6_targets)  # pinged only when the router has IPv6 on
         self.ping_count = ping_count
         self.isp_hop_setting = isp_hop_setting
         self.fast_interval = fast_interval
@@ -341,6 +350,8 @@ class NodePoller:
         self._last_wan_ip: str | None = None
         self._ip_changes = 0
         self.channels = ChannelTracker()
+        self.dual_wan = False
+        self.ipv6 = False
         self._errors: dict[str, int] = {}
         self._ping_totals: dict[str, list[int]] = {}  # target -> [sent, received]
         self._ok: dict[str, bool] = {}
@@ -397,6 +408,13 @@ class NodePoller:
         ]
         for zone, temp in parsers.parse_thermal(sec.get("thermal", "")).items():
             out.append(sample("asus_router_temperature_celsius", temp, node=self.node, sensor=zone))
+        flag = nv.get("webs_state_flag", "").strip()
+        if flag.isdigit():
+            # 1 = new firmware, 2 = new firmware the router marks as important; 0 = up to date.
+            latest = parsers.firmware_version(nv.get("webs_state_info", ""))
+            out.append(
+                sample("asus_firmware_update_available", 1 if flag in ("1", "2") else 0, node=self.node, latest=latest)
+            )
 
         if self.is_primary:
             out += await self._slow_primary(nv, sec)
@@ -454,18 +472,42 @@ class NodePoller:
         if wan_ip:
             self._last_wan_ip = wan_ip
         out.append(sample("asus_wan_ip_changes", self._ip_changes, node=self.node))
-        out.append(
-            sample(
-                "asus_wan_info",
-                1,
-                node=self.node,
-                iface=nv.get("wan0_ifname", ""),
-                proto=nv.get("wan0_proto", ""),
-                ip=wan_ip,
-                gateway=nv.get("wan0_gateway", ""),
-                dns=nv.get("wan0_dns", ""),
+        wans = parsers.parse_dualwan(nv.get("wans_dualwan", ""))
+        self.dual_wan = len(wans) > 1
+        for wan in ("0", "1") if self.dual_wan else ("0",):
+            out.append(
+                sample(
+                    "asus_wan_info",
+                    1,
+                    node=self.node,
+                    wan=wan,
+                    wan_type=wans[int(wan)] if len(wans) > int(wan) else "wan",
+                    iface=nv.get(f"wan{wan}_ifname", ""),
+                    proto=nv.get(f"wan{wan}_proto", ""),
+                    ip=nv.get(f"wan{wan}_ipaddr", ""),
+                    gateway=nv.get(f"wan{wan}_gateway", ""),
+                    dns=nv.get(f"wan{wan}_dns", ""),
+                )
             )
-        )
+        if self.dual_wan:
+            mode = {"fo": "failover", "fb": "failback", "lb": "load balance"}.get(nv.get("wans_mode", ""), "")
+            out.append(sample("asus_dualwan_info", 1, node=self.node, wans=" ".join(wans), mode=mode))
+
+        service = nv.get("ipv6_service", "").strip()
+        self.ipv6 = service not in ("", "disabled")
+        if service:
+            out.append(
+                sample(
+                    "asus_ipv6_info",
+                    1,
+                    node=self.node,
+                    service=service,
+                    prefix=nv.get("ipv6_prefix", ""),
+                    prefix_length=nv.get("ipv6_prefix_length", "") if self.ipv6 else "",
+                    router_addr=nv.get("ipv6_rtr_addr", ""),
+                )
+            )
+            out.append(sample("asus_ipv6_enabled", 1 if self.ipv6 else 0, node=self.node))
 
         leases = parsers.parse_leases(sec.get("leases", ""))
         self.shared.hostnames = {lease.mac: lease.hostname for lease in leases if lease.hostname}
@@ -511,10 +553,14 @@ class NodePoller:
             if self.isp_hop:
                 targets.append((self.isp_hop, "isp_gateway"))
             targets += [(t, "internet") for t in self.ping_targets if t != self.isp_hop]
+            if self.ipv6:
+                targets += [(t, "internet_v6") for t in self.ping6_targets]
             tasks += [self.conn.run(commands.ping(t, self.ping_count)) for t, _ in targets]
         results = await asyncio.gather(*tasks)
         self._count_unparsed(results[0], FAST_REQUIRED)
-        self.store.set(self.node, "fast", fast_samples(self.node, results[0], self.wan_iface, self.is_primary))
+        self.store.set(
+            self.node, "fast", fast_samples(self.node, results[0], self.wan_iface, self.is_primary, self.dual_wan)
+        )
 
         ping_out: list[Sample | None] = []
         for (target, role), text in zip(targets, results[1:], strict=False):

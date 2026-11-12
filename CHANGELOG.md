@@ -24,5 +24,11 @@ under the new version when you cut a release.
 - Per-radio channel, width, DFS flag and noise floor, plus client SNR; Wi-Fi radios row on the Router & Mesh dashboard.
 - `asus_wifi_channel_changes_total`: channel or width changes per radio.
 - Channel utilization from `wl chanim_stats` (`asus_wifi_airtime_percent`).
+- Firmware update check: `asus_firmware_update_available`, a Nodes table column and an alert.
+- Dual WAN: per-WAN state and addressing, failover alert.
+- IPv6: settings info and `ping6` from the router when IPv6 is on (`ROUTER_PING6_TARGETS`).
+
+### Changed
+- `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main

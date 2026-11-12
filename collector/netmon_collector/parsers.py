@@ -297,6 +297,18 @@ class ArpEntry:
     device: str
 
 
+def firmware_version(info: str) -> str:
+    """webs_state_info "3004_388_24911-g2055148" -> "3.0.0.4.388_24911-g2055148" (like firmver.buildno_extendno)."""
+    info = info.strip()
+    m = re.match(r"^(\d)(\d)(\d)(\d)_(.+)$", info)
+    return f"{m[1]}.{m[2]}.{m[3]}.{m[4]}.{m[5]}" if m else info
+
+
+def parse_dualwan(value: str) -> list[str]:
+    """wans_dualwan "wan usb" -> ["wan", "usb"]; "wan none" -> ["wan"]."""
+    return [w for w in value.split() if w and w != "none"]
+
+
 def dhcp_pool_size(start: str, end: str) -> int | None:
     """Addresses from dhcp_start to dhcp_end inclusive; None if either is missing or they're reversed."""
     try:

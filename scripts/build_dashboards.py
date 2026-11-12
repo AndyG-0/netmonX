@@ -218,9 +218,9 @@ CPU_BUSY = (
 
 def overview(links) -> dict:
     L = Layout()
-    L.add(stat("Internet", "min(asus_wan_up)", mappings=UP_MAP,
+    L.add(stat("Internet", "max(asus_wan_up)", mappings=UP_MAP,
                steps=thresholds((None, "red"), (1, "green")), color_mode="background",
-               description="WAN state reported by the router."), 4, 4)
+               description="WAN state reported by the router (with dual WAN: up if either WAN is up)."), 4, 4)
     L.add(stat("Latency (router → internet)", 'avg(asus_ping_rtt_avg_ms{role="internet"})', "ms", decimals=1,
                steps=thresholds((None, "green"), (40, "yellow"), (100, "red")), graph=True,
                description="Average of the router's pings to the internet targets. No home Wi-Fi in the path."), 4, 4)
@@ -264,7 +264,7 @@ def overview(links) -> dict:
          target("sum(rate(asus_wan_transmit_bytes_total[$__rate_interval])) * -8", "upload", "B")],
         "bps", fill=25, description="Upload is drawn below zero."), 16, 8)
     L.add(state_timeline("Internet connection",
-                         [target("min(asus_wan_up)", "WAN"),
+                         [target("max by (wan) (asus_wan_up)", "WAN {{wan}}"),
                           target("min(asus_up)", "router SSH", "B")]), 8, 8)
     return dashboard("netmonx-overview", "Network Overview", L, links)
 
@@ -311,7 +311,8 @@ def isp(links) -> dict:
                 organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
                                             "Value #A": True, "Value #B": True, "node": True},
                           "renameByName": {"ip": "WAN IP", "gateway": "Gateway", "dns": "ISP DNS",
-                                           "proto": "Type", "iface": "Interface"}}), 8, 8)
+                                           "proto": "Type", "iface": "Interface", "wan": "WAN",
+                                           "wan_type": "Port"}}), 8, 8)
     L.add(timeseries("WAN IP changes per day", [target("increase(asus_wan_ip_changes_total[1d])", "changes")],
                      "none", min_=0), 8, 8)
     L.row("DNS & websites")
@@ -330,13 +331,18 @@ def router(links) -> dict:
     sel = 'node=~"$node"'
     L.add(table("Nodes", [target("asus_router_info", ref="A", instant=True, table=True),
                           target("asus_router_uptime_seconds", ref="B", instant=True, table=True),
-                          target("asus_up", ref="C", instant=True, table=True)],
+                          target("asus_up", ref="C", instant=True, table=True),
+                          target("asus_firmware_update_available", ref="D", instant=True, table=True)],
                 organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
                                             "Value #A": True},
                           "renameByName": {"node": "Node", "model": "Model", "firmware": "Firmware",
                                            "mac": "MAC", "role": "Role", "Value #B": "Uptime",
-                                           "Value #C": "Reachable"}},
+                                           "Value #C": "Reachable", "latest": "Latest firmware",
+                                           "Value #D": "Update"}},
                 overrides=[override("Uptime", unit="s"),
+                           override("Update", custom_cellOptions={"type": "color-text"}, mappings=[
+                               {"type": "value", "options": {"0": {"text": "up to date", "color": "green"},
+                                                             "1": {"text": "available", "color": "orange"}}}]),
                            override("Reachable", mappings=UP_MAP,
                                     custom_cellOptions={"type": "color-text"})]), 24, 6)
     L.add(timeseries("CPU busy", [target(CPU_BUSY.format(sel=", " + sel, sel0=sel), "{{node}}")],

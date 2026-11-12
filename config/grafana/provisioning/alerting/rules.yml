@@ -41,7 +41,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'min(asus_wan_up)'
+              expr: 'max(asus_wan_up)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -56,7 +56,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "The router reports the internet connection as down."
+          summary: "The router reports the internet connection as down (every WAN, with dual WAN)."
       - uid: packet-loss
         title: Internet packet loss above 2%
         condition: C
@@ -395,3 +395,55 @@ groups:
           severity: warning
         annotations:
           summary: "{{ $$labels.hostname }} ({{ $$labels.mac }}) has been offline longer than its alert_offline_hours in devices.yml."
+      - uid: wan-failover
+        title: Primary WAN down, running on the second WAN
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'min(asus_wan_up{wan="0"}) + 0 * max(asus_wan_up{wan="1"})'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dual WAN: the primary WAN is down. Traffic uses the second WAN if it is up."
+      - uid: firmware-update
+        title: Firmware update available
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: 'max by (node, latest) (asus_firmware_update_available)'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels:
+          severity: info
+        annotations:
+          summary: "{{ $$labels.node }}: the router found newer firmware ({{ $$labels.latest }}). Update it from the Asus app or web UI."

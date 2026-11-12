@@ -47,7 +47,7 @@
     {
       "type": "stat",
       "title": "Internet",
-      "description": "WAN state reported by the router.",
+      "description": "WAN state reported by the router (with dual WAN: up if either WAN is up).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -58,7 +58,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "min(asus_wan_up)",
+          "expr": "max(asus_wan_up)",
           "legendFormat": "",
           "refId": "A"
         }
@@ -982,8 +982,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "min(asus_wan_up)",
-          "legendFormat": "WAN",
+          "expr": "max by (wan) (asus_wan_up)",
+          "legendFormat": "WAN {{wan}}",
           "refId": "A"
         },
         {

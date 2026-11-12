@@ -54,14 +54,17 @@ Effort: S = an evening, M = a weekend, L = bigger.
       built from the existing `asus_mesh_node_info` and `asus_client_info`.
 
 ### Router / WAN
-- [ ] **Firmware update available** (S) [UniFi, eero]: read `nvram get webs_state_update webs_state_info`.
+- [x] **Firmware update available** (S) [UniFi, eero]: read `nvram get webs_state_update webs_state_info`.
       Gauge plus alert.
+      Done: `asus_firmware_update_available{latest}` from `webs_state_flag`/`webs_state_info` (verified on the XT8: flag 0 and the running version), "Update" column on the Nodes table, info alert.
 - [ ] **LAN/WAN port link speed & duplex** (M) [UniFi port view]: read-only `ethctl <if> media-type` /
       `robocfg show` (depends on the model; check with recon first). Alert when a wired backhaul or a
       known PC negotiates at 100 Mb.
-- [ ] **Dual-WAN / failover** (S): also read `wan1_*` nvram keys and add a `wan` label.
-- [ ] **IPv6** (M): `ipv6_service`, `ipv6_rtr_addr`, `ipv6_prefix` nvram; `ping6` targets from the router.
+- [x] **Dual-WAN / failover** (S): also read `wan1_*` nvram keys and add a `wan` label.
+      Done: `wan` label on `asus_wan_up`/`asus_wan_link_up`/`asus_wan_info` (wan1 only when `wans_dualwan` has a second WAN), `asus_dualwan_info{wans,mode}`; WAN-down alert now means every WAN, plus a failover alert. Not tested on real dual-WAN hardware.
+- [x] **IPv6** (M): `ipv6_service`, `ipv6_rtr_addr`, `ipv6_prefix` nvram; `ping6` targets from the router.
       Check IPv6 reachability on the ISP dashboard.
+      Done: `asus_ipv6_info`, `asus_ipv6_enabled`; `ping6` to `ROUTER_PING6_TARGETS` (role `internet_v6`) only when IPv6 is on. Your router has IPv6 disabled, so the ping6 path is unverified.
 - [ ] **Config drift detection** (S) [Oxidized/RANCID]: hash `nvram show` with counters and timestamps left
       out, export `asus_config_hash_info`, and alert when it changes. Builds on the README's md5sum tip.
 - [ ] **Security exposure view** (M) [Firewalla, UniFi threat panel]: list port forwards (`vts_rulelist`),

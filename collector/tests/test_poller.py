@@ -71,7 +71,11 @@ def test_full_cycle_primary():
     assert [n.ip for n in shared.mesh_nodes] == ["192.168.50.2", "192.168.50.3", "192.168.50.4"]
     assert shared.hostnames["7C:D9:5C:11:22:33"] == "Pixel-8"
     assert 'asus_up{node="192.168.50.1"} 1.0' in text
-    assert 'asus_wan_up{node="192.168.50.1"} 1.0' in text
+    assert 'asus_wan_up{node="192.168.50.1",wan="0"} 1.0' in text
+    assert 'wan="1"' not in text  # single WAN: wan1 state is ignored
+    assert 'asus_firmware_update_available{latest="3.0.0.4.388_25000-gabcdef0",node="192.168.50.1"} 1.0' in text
+    assert 'asus_ipv6_enabled{node="192.168.50.1"} 0.0' in text
+    assert "asus_dualwan_info" not in text
     assert 'asus_wan_receive_bytes_total{iface="eth0",node="192.168.50.1"} 9.8213876123e+010' in text
     assert 'asus_ping_loss_ratio{node="192.168.50.1",role="isp_gateway",target="73.12.34.1"} 0.2' in text
     # Two bursts of 5 sent / 4 received accumulate.
@@ -180,3 +184,44 @@ def test_channel_tracker_counts_changes():
     assert t.update("eth5", "44/80") == 0
     assert t.update("eth5", "100/80") == 1
     assert t.update("eth4", "6") == 0
+
+
+def test_dual_wan_and_ipv6():
+    from netmon_collector import poller as P
+
+    text = "@@wan_state\n2\n1\n0\n1\n"
+    out = [x for x in P.fast_samples("r", text, None, True, dual_wan=True) if x]
+    up = {dict(x.labels)["wan"]: x.value for x in out if x.name == "asus_wan_up"}
+    assert up == {"0": 1, "1": 0}
+
+    conn = FakeConn()
+    poller, store, _ = make(conn)
+    slow = (FIX / "slow_snapshot.txt").read_text()
+    slow = (
+        slow.replace("wans_dualwan=wan none", "wans_dualwan=wan usb")
+        .replace("ipv6_service=disabled", "ipv6_service=dhcp6")
+        .replace("ipv6_prefix=\n", "ipv6_prefix=2001:db8:1::\n")
+    )
+    conn.run = _fixed(conn.run, "slow_snapshot", slow)
+    asyncio.run(poller._guard("slow", poller.poll_slow, ["slow"]))
+    rendered = render(store)
+    assert 'asus_dualwan_info{mode="failover",node="192.168.50.1",wans="wan usb"} 1.0' in rendered
+    assert 'wan="1",wan_type="usb"' in rendered
+    assert poller.dual_wan and poller.ipv6
+    assert 'asus_ipv6_info{node="192.168.50.1",prefix="2001:db8:1::",prefix_length="64"' in rendered
+
+
+def _fixed(run, name, text):
+    async def wrapped(command):
+        if command.name == name:
+            return text
+        return await run(command)
+
+    return wrapped
+
+
+def test_ping6_command():
+    from netmon_collector import commands
+
+    assert commands.ping("2606:4700:4700::1111", 3).text.startswith("ping6 -c 3")
+    assert commands.ping("1.1.1.1", 3).text.startswith("ping -c 3")

@@ -113,12 +113,13 @@ Speedtest Tracker serves its Prometheus metrics only after you enable them:
 
 ### 6. Alerts (optional)
 
-Grafana loads 15 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
+Grafana loads 17 alert rules from `config/grafana/provisioning/alerting/rules.yml`:
 
 | Alert | Fires when |
 |---|---|
 | Router or mesh node not answering SSH | `asus_up` is 0 for 2 minutes |
-| WAN down | the router reports the WAN as down for 1 minute |
+| WAN down | the router reports the WAN as down for 1 minute (every WAN, with dual WAN) |
+| Primary WAN down, running on the second WAN | dual WAN only: WAN 0 is down for 2 minutes |
 | Internet packet loss above 2% | every internet ping target loses >2% for 5 minutes |
 | Internet latency over 2x normal | latency is over double its 24-hour average for 10 minutes |
 | LAN host not answering pings | the router or a mesh node stops answering smokeping |
@@ -131,6 +132,7 @@ Grafana loads 15 alert rules from `config/grafana/provisioning/alerting/rules.ym
 | DHCP pool almost full | leases > 90% of `dhcp_start`..`dhcp_end` for 15 minutes |
 | Collector data stale | no finished poll for 5 minutes, or no data at all |
 | New device on the network | the collector sees a MAC for the first time (severity `info`) |
+| Firmware update available | the router's own update check found newer firmware (severity `info`) |
 | Known device offline | a device with `alert_offline_hours` in `devices.yml` has been gone that long |
 
 To get notified:
@@ -156,6 +158,8 @@ To roll back, set the previous version and run the same commands.
 ## Notes and caveats
 
 - **ISP hop:** with `ISP_HOP=auto`, the collector pings your WAN gateway. If that gateway is a private IP (the modem is in router mode), it pings the first ISP-side hop from traceroute instead. Some ISPs drop ICMP to their gateway, which looks like 100% loss. In that case, set `ISP_HOP=none` or pick a hop that answers.
+- **Dual WAN and IPv6:** with dual WAN on, `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` get a series per WAN (`wan="0"`/`"1"`). With IPv6 on in the router, the collector also runs `ping6` from the router to `ROUTER_PING6_TARGETS` (role `internet_v6`). Neither is tested on real dual-WAN or IPv6 setups yet.
+- **Firmware updates** come from the router's own update check (`webs_state_*` nvram). The collector never asks Asus for anything itself.
 - **Mesh nodes** are found from the main router's `cfg_device_list`. Set `MESH_NODES` to a list of IPs to override this, or to `none`.
 - **Radio temperatures** come from `wl phy_tempsense`. Some models report them on a different scale. Compare against the router UI.
 - **Clients:** device counts, the node each device is on, and wired vs. Wi-Fi come from the main router's AiMesh client list, so they cover every node. The main router also lists devices behind a mesh node as wired; the collector counts each device once, on the node it's actually attached to. Link rate and traffic come from `wl` on each node and need `MESH_SSH=true`.
