@@ -53,8 +53,9 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [ ] **Backhaul link quality** (M) [UniFi uplink / mesh view, eero]: RSSI, rate and band of each node's
       wireless backhaul (or wired backhaul speed). Source: `cfg_device_list` plus the backhaul STA in
       `wl assoclist`/`sta_info` on the parent. Alert when backhaul drops to 2.4 GHz or below a rate floor.
-- [ ] **Topology map** (M) [UniFi topology]: Grafana Node Graph panel showing router → nodes → clients,
+- [x] **Topology map** (M) [UniFi topology]: Grafana Node Graph panel showing router → nodes → clients,
       built from the existing `asus_mesh_node_info` and `asus_client_info`.
+      Done: Done: Node Graph "Topology" row on Router & Mesh: main router → mesh nodes (from `asus_mesh_node_info`) → every device (`asus_client_info`), built with `label_replace` into Node Graph id/title/subtitle/source/target columns. Queries checked against live data (66 nodes, 65 edges); layout not looked at in a browser yet.
 
 ### Router / WAN
 - [x] **Firmware update available** (S) [UniFi, eero]: read `nvram get webs_state_update webs_state_info`.

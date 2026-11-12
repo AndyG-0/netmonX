@@ -1799,12 +1799,84 @@
     },
     {
       "type": "row",
-      "title": "Collector",
+      "title": "Topology",
       "id": 24,
       "collapsed": false,
       "gridPos": {
         "x": 0,
         "y": 87,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "type": "nodeGraph",
+      "title": "Topology",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Main router, mesh nodes and every device attached to each, from the AiMesh client list. Scroll to zoom, drag to pan, click a node for its details.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk by (id) (1, max by (id, title, subtitle) (label_replace(label_replace(label_replace(label_replace(((max by (node, role) (asus_router_info) * on (node) group_left (node_name) max by (node, node_name) (asus_client_info)) or max by (node, role) (asus_router_info)), \"id\", \"$1\", \"node\", \"(.*)\"), \"title\", \"$1\", \"node\", \"(.*)\"), \"title\", \"$1\", \"node_name\", \"(.+)\"), \"subtitle\", \"$1\", \"role\", \"(.*)\") or label_replace(label_replace(label_replace(label_replace(label_replace(max by (mac, hostname, band) (asus_client_info), \"subtitle\", \"wired\", \"band\", \"\"), \"subtitle\", \"$1\", \"band\", \"(.+)\"), \"id\", \"$1\", \"mac\", \"(.*)\"), \"title\", \"$1\", \"mac\", \"(.*)\"), \"title\", \"$1\", \"hostname\", \"(.+)\")))",
+          "legendFormat": "",
+          "refId": "nodes",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk by (id) (1, max by (id, source, target) (label_replace(label_replace(label_replace(max by (mac, node) (asus_client_info), \"id\", \"$1\", \"mac\", \"(.*)\"), \"source\", \"$1\", \"node\", \"(.*)\"), \"target\", \"$1\", \"mac\", \"(.*)\") or label_replace(label_replace(label_replace(max by (ip, node) (asus_mesh_node_info), \"id\", \"$1\", \"ip\", \"(.*)\"), \"source\", \"$1\", \"node\", \"(.*)\"), \"target\", \"$1\", \"ip\", \"(.*)\")))",
+          "legendFormat": "",
+          "refId": "edges",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "Value #nodes": true,
+              "Value #edges": true
+            }
+          }
+        }
+      ],
+      "options": {
+        "nodes": {},
+        "edges": {}
+      },
+      "id": 25,
+      "gridPos": {
+        "x": 0,
+        "y": 88,
+        "w": 24,
+        "h": 16
+      }
+    },
+    {
+      "type": "row",
+      "title": "Collector",
+      "id": 26,
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 104,
         "w": 24,
         "h": 1
       },
@@ -1859,10 +1931,10 @@
           "sort": "desc"
         }
       },
-      "id": 25,
+      "id": 27,
       "gridPos": {
         "x": 0,
-        "y": 88,
+        "y": 105,
         "w": 12,
         "h": 8
       }
@@ -1934,10 +2006,10 @@
           "sort": "desc"
         }
       },
-      "id": 26,
+      "id": 28,
       "gridPos": {
         "x": 12,
-        "y": 88,
+        "y": 105,
         "w": 12,
         "h": 8
       }

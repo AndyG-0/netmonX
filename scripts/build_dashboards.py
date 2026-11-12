@@ -218,6 +218,37 @@ def query_var(name, label, query, multi=False, include_all=False, regex=""):
     return v
 
 
+def relabel(expr, **labels):
+    """Copy labels in PromQL: relabel(x, id="mac") sets id from mac. A tuple tries sources in order (last non-empty wins)."""
+    for new, src in labels.items():
+        for i, one in enumerate(src if isinstance(src, tuple) else (src,)):
+            expr = f'label_replace({expr}, "{new}", "$1", "{one}", "{"(.*)" if i == 0 else "(.+)"}")'
+    return expr
+
+
+def topology():
+    """Node Graph of router -> mesh nodes -> devices, from two instant table queries (nodes, edges)."""
+    infra = ("(max by (node, role) (asus_router_info) * on (node) group_left (node_name) "
+             "max by (node, node_name) (asus_client_info)) or max by (node, role) (asus_router_info)")
+    infra = relabel(f"({infra})", id="node", title=("node", "node_name"), subtitle="role")
+    devices = 'label_replace(max by (mac, hostname, band) (asus_client_info), "subtitle", "wired", "band", "")'
+    devices = relabel(f'label_replace({devices}, "subtitle", "$1", "band", "(.+)")', id="mac", title=("mac", "hostname"))
+    nodes = f"topk by (id) (1, max by (id, title, subtitle) ({infra} or {devices}))"  # one row per id
+    links = relabel("max by (mac, node) (asus_client_info)", id="mac", source="node", target="mac")
+    mesh = relabel("max by (ip, node) (asus_mesh_node_info)", id="ip", source="node", target="ip")
+    edges = f"topk by (id) (1, max by (id, source, target) ({links} or {mesh}))"
+    return {
+        "type": "nodeGraph", "title": "Topology", "datasource": DS,
+        "description": "Main router, mesh nodes and every device attached to each, from the AiMesh client "
+                       "list. Scroll to zoom, drag to pan, click a node for its details.",
+        "targets": [target(nodes, ref="nodes", instant=True, table=True),
+                    target(edges, ref="edges", instant=True, table=True)],
+        "transformations": [{"id": "organize", "options": {"excludeByName": {
+            "Time": True, "Value": True, "Value #nodes": True, "Value #edges": True}}}],
+        "options": {"nodes": {}, "edges": {}},
+    }
+
+
 UP_MAP = [{"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}}}]
 LAN_RTT = (
     "1000 * sum by (host) (rate(smokeping_response_duration_seconds_sum{{{sel}}}[$__rate_interval]))"
@@ -512,6 +543,9 @@ def router(links) -> dict:
                 "WireGuard {{peer}}: s since handshake", "B")],
         "none", min_=0, fill=0,
         description="WireGuard counts a peer as connected while it handshook in the last 3 minutes."), 8, 8)
+    L.row("Topology")
+    L.add(topology(), 24, 16)
+
     L.row("Collector")
     L.add(timeseries(
         "SSH command time (p95)",
