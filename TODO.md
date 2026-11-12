@@ -4,8 +4,29 @@ Ideas for future work, grouped by priority. Inspiration in [brackets].
 Rule for everything here: router access stays read-only (`collector/netmon_collector/commands.py`).
 Effort: S = an evening, M = a weekend, L = bigger.
 
+## Overnight run (branch `todo-overnight`, not pushed)
+
+22 commits, one per item (`git log --oneline main..todo-overnight`), each passing `./dev.sh check`. All router
+access stays read-only. Grafana loads all 7 dashboards and 24 alert rules without errors on the fake stack.
+Still open: neighbouring networks, backhaul quality, wired per-client traffic, app usage, DNS filtering,
+VictoriaMetrics and more models (notes on each below).
+
+Firmware gotchas (now in the code comments and tests):
+- `sh` on this firmware is a Broadcom memory peek/poke tool, not a shell. `test_commands_are_read_only` blocks it.
+- `ethctl <if> media-type <value>` *sets* the link mode, so the port speeds come from `/tmp/diag_port_status.json`.
+
+Not verified on real hardware or in a browser: the `vts_rulelist` format, dual-WAN, `ping6`, WireGuard,
+syslog patterns for web login failures/radar/OOM, the topology and device dashboards' look, MQTT with a real
+Home Assistant. `CONFIG_VOLATILE_KEYS` may need tuning if the config-drift alert fires on its own.
+
 ## Questions for Andy
 
+- **VictoriaMetrics:** I didn't swap it in for Prometheus. That's a design choice, and Prometheus already keeps
+  365 days. Do you want it as an optional profile (remote-write) or as a replacement?
+- **DNS filtering:** the router hands out 1.1.1.1 / 8.8.8.8 and DNS filtering is off, so you don't seem to run
+  Pi-hole or AdGuard. Pi-hole v6 also changed its API. Worth doing only if you plan to run one; which?
+- **Pushgateway** (iperf3 profile) has no auth; anything on the LAN can push to it. Fine at home?
+- **Digest privacy:** `DIGEST_NAMES` is off by default because ntfy.sh topics are public by name.
 - **OUI dataset:** vendor names need Wireshark's `manuf` file (~2 MB, GPL-2 distribution). I didn't commit it; `scripts/update-oui.sh` fetches it. Commit it (or bake it into the image) if you want vendors out of the box.
 
 ## P1: high value, uses data we already collect or can read cheaply
@@ -27,7 +48,7 @@ Effort: S = an evening, M = a weekend, L = bigger.
       Done: `config/collector/devices.yml` (`DEVICES_FILE`), reloaded on change; adds `owner`/`type` labels and `asus_device_offline_alert_hours`.
 - [x] **Per-device drill-down dashboard** (M) [UniFi client page]: one `$mac` variable. Show signal, link rate,
       node/roam history, traffic, online timeline, DHCP lease and vendor.
-      Done: Done: *Device* dashboard (`netmonx-device`, `$mac` picker by name), linked from the MAC columns on Clients. Shows signal/SNR, link rate, Wi-Fi traffic, score and retries, online and attached-node timelines, latest roam, DHCP lease, vendor/owner, ping. Wired traffic per device isn't available (see below).
+      Done: *Device* dashboard (`netmonx-device`, `$mac` picker by name), linked from the MAC columns on Clients. Shows signal/SNR, link rate, Wi-Fi traffic, score and retries, online and attached-node timelines, latest roam, DHCP lease, vendor/owner, ping. Wired traffic per device isn't available (see below).
 - [x] **Wi-Fi experience score** (M) [UniFi "Wi-Fi Experience", Meraki]: a 0-100 score per client from RSSI,
       tx/rx rate vs. the band's max, and retries (from `wl sta_info`). Show the per-node and network
       averages on Overview.
@@ -46,6 +67,8 @@ Effort: S = an evening, M = a weekend, L = bigger.
       Done: `asus_wifi_airtime_percent{stat}` with the driver's tx/inbss/obss/nocat/nopkt/doze/txop/goodtx/badtx/idle shares (verified on the XT8: version 3 output, one row). "Busy" is shown as 100 - idle.
 - [ ] **Neighbouring networks** (M) [UniFi RF scan, WiFi Analyzer]: read cached `wl -i X scanresults` only, never
       `wl scan`. Count APs per channel to explain interference. Skip if the cache is empty on stock firmware.
+      Not done: recon showed `wl scanresults` returns "wl: Not Found" on this firmware (empty cache). Needs a
+      read-only source that has a cache; open for ideas.
 - [x] **DFS / channel-change events** (S): count changes in the exported chanspec; annotate the dashboards.
       Done: `asus_wifi_channel_changes_total` (counted by the collector between polls) and a channel state timeline. Dashboard annotations come with the annotations item.
 
@@ -53,9 +76,11 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [ ] **Backhaul link quality** (M) [UniFi uplink / mesh view, eero]: RSSI, rate and band of each node's
       wireless backhaul (or wired backhaul speed). Source: `cfg_device_list` plus the backhaul STA in
       `wl assoclist`/`sta_info` on the parent. Alert when backhaul drops to 2.4 GHz or below a rate floor.
+      Partly covered: wired backhaul speed is the node's `W0` port in `asus_port_link_speed_mbps` (with the
+      uplink alert). Wireless backhaul needs recon on a node with Wi-Fi backhaul (yours are wired).
 - [x] **Topology map** (M) [UniFi topology]: Grafana Node Graph panel showing router → nodes → clients,
       built from the existing `asus_mesh_node_info` and `asus_client_info`.
-      Done: Done: Node Graph "Topology" row on Router & Mesh: main router → mesh nodes (from `asus_mesh_node_info`) → every device (`asus_client_info`), built with `label_replace` into Node Graph id/title/subtitle/source/target columns. Queries checked against live data (66 nodes, 65 edges); layout not looked at in a browser yet.
+      Done: Node Graph "Topology" row on Router & Mesh: main router → mesh nodes (from `asus_mesh_node_info`) → every device (`asus_client_info`), built with `label_replace` into Node Graph id/title/subtitle/source/target columns. Queries checked against live data (66 nodes, 65 edges); layout not looked at in a browser yet.
 
 ### Router / WAN
 - [x] **Firmware update available** (S) [UniFi, eero]: read `nvram get webs_state_update webs_state_info`.
@@ -98,15 +123,15 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **ISP report card / SLA** (M) [eero, Ookla, UniFi Internet health]: Prometheus recording rules for
       monthly uptime %, outage count and total minutes, p95 latency, median speed vs. the plan speed
       (`ISP_PLAN_DOWN/UP` in .env). Add a printable "evidence for your ISP" dashboard.
-      Done: Done: *ISP report card* dashboard (`netmonx-isp-report`, any time range, default 30 days, printable) and 30-day recording rules in `config/prometheus/rules/isp.yml` (`netmonx:wan_uptime:ratio_30d`, `:wan_outages:30d`, `:wan_downtime_minutes:30d`, p95 latency, loss, median speeds, plan ratio) with promtool unit tests. Plan speed from `ISP_PLAN_DOWN`/`ISP_PLAN_UP` (Mbit/s) via the collector's `netmonx_isp_plan_bits`.
+      Done: *ISP report card* dashboard (`netmonx-isp-report`, any time range, default 30 days, printable) and 30-day recording rules in `config/prometheus/rules/isp.yml` (`netmonx:wan_uptime:ratio_30d`, `:wan_outages:30d`, `:wan_downtime_minutes:30d`, p95 latency, loss, median speeds, plan ratio) with promtool unit tests. Plan speed from `ISP_PLAN_DOWN`/`ISP_PLAN_UP` (Mbit/s) via the collector's `netmonx_isp_plan_bits`.
 - [x] **Outage annotations** (S): Grafana annotations for WAN down/up, node reboots and WAN IP changes.
       Done: Prometheus annotations on every dashboard: WAN down (red), node reboots (orange, from uptime resets), WAN IP changes (blue). Toggle them at the top of each dashboard.
 - [x] **Bufferbloat grade** (M) [Waveform, Ookla loaded latency]: compare idle latency with the loaded latency
       that speedtest-tracker reports, and grade A-F. Optionally run a ping series during the speed test.
-      Done: Done: grade A+ to F (Waveform's thresholds) from Speedtest Tracker's loaded latency (IQM, worse of download/upload) minus idle ping. Tile on ISP & Internet and the report card, "added under load" line, recording rule `netmonx:bufferbloat_ms`. No extra ping series during the test (Speedtest Tracker already measures loaded latency).
+      Done: grade A+ to F (Waveform's thresholds) from Speedtest Tracker's loaded latency (IQM, worse of download/upload) minus idle ping. Tile on ISP & Internet and the report card, "added under load" line, recording rule `netmonx:bufferbloat_ms`. No extra ping series during the test (Speedtest Tracker already measures loaded latency).
 - [x] **Per-hop path monitoring** (M) [PingPlotter, MTR]: run a traceroute every slow interval and keep loss and
       latency per hop for the first few hops. This shows which hop starts losing packets.
-      Done: Done: traceroute now sends 3 probes per hop (`-q 3`); per hop `asus_traceroute_hop_rtt_ms` (average), `asus_traceroute_hop_loss_ratio` and probe counters `asus_traceroute_hop_probes_sent/received_total`. Latency and loss per hop panels on ISP & Internet. Checked on the real router: hops 3-5 never answer traceroute, so only the first two show data there.
+      Done: traceroute now sends 3 probes per hop (`-q 3`); per hop `asus_traceroute_hop_rtt_ms` (average), `asus_traceroute_hop_loss_ratio` and probe counters `asus_traceroute_hop_probes_sent/received_total`. Latency and loss per hop panels on ISP & Internet. Checked on the real router: hops 3-5 never answer traceroute, so only the first two show data there.
 - [x] **Per-client LAN latency** (M) [UniFi client latency]: the collector serves an HTTP service-discovery
       endpoint (`/sd/clients`, `/sd/nodes`) and Prometheus probes clients with blackbox ICMP. Opt-in, rate-limited.
       Done: collector serves `/sd/nodes`, `/sd/dns`, `/sd/clients` (Prometheus HTTP SD). `lan_clients` blackbox ICMP job, opt-in with `LAN_CLIENT_PING=true`, once a minute, at most `LAN_CLIENT_PING_MAX` (50) online devices on the main LAN. Panels on Clients & Wi-Fi.
@@ -119,7 +144,7 @@ Effort: S = an evening, M = a weekend, L = bigger.
 - [x] **Syslog events** (M) [UniFi event log]: `tail -n` of `/tmp/syslog.log` since the last offset. Count
       matched events (WAN reconnect, DFS radar, auth failure, OOM, roam) as counters. Optionally send raw lines
       to Loki in an extra compose profile.
-      Done: Done: each slow poll reads `tail -n 500 /tmp/syslog.log` on every node, counts only lines after the newest one seen last time (first poll is the baseline; a rotation counts as a gap), and exports `asus_syslog_events_total{event}` for 16 events (WAN down/restored, SSH password/key logins and failures, web/VPN login failures, VPN logins, Wi-Fi connects/disconnects, roam assist, weak-signal kicks, band steering, DFS radar, OOM, crash). Patterns from the real router's log. "Router events" row on Router & Mesh; alerts for failed logins and out-of-memory. Loki not done.
+      Done: each slow poll reads `tail -n 500 /tmp/syslog.log` on every node, counts only lines after the newest one seen last time (first poll is the baseline; a rotation counts as a gap), and exports `asus_syslog_events_total{event}` for 16 events (WAN down/restored, SSH password/key logins and failures, web/VPN login failures, VPN logins, Wi-Fi connects/disconnects, roam assist, weak-signal kicks, band steering, DFS radar, OOM, crash). Patterns from the real router's log. "Router events" row on Router & Mesh; alerts for failed logins and out-of-memory. Loki not done.
 - [ ] **Per-client traffic for wired devices** (L) [UniFi traffic stats, Firewalla]: today's per-client bytes
       come only from `wl` (Wi-Fi). Look at read-only sources: conntrack acct (`/proc/net/nf_conntrack`, when
       `nf_conntrack_acct=1`), or Asus Traffic Analyzer's database (when the user has it on). Research first.
@@ -127,7 +152,7 @@ Effort: S = an evening, M = a weekend, L = bigger.
       changes. Research only.
 - [x] **LAN throughput test** (M) [WiFiman]: optional `iperf3 -s` container. Document running a client from
       phones and laptops, and graph the results (or push them via Pushgateway).
-      Done: Done: `iperf3` compose profile (iperf3 server + Pushgateway, found by Prometheus via DNS SD so there's no down target without the profile) and `scripts/lan-speed.sh <host> [name]` (upload + download, pushes `netmonx_lan_speed_bits{client,direction}`). "LAN speed tests" row on Clients. Tested end to end in podman. Phone apps can't push; their results stay on the phone.
+      Done: `iperf3` compose profile (iperf3 server + Pushgateway, found by Prometheus via DNS SD so there's no down target without the profile) and `scripts/lan-speed.sh <host> [name]` (upload + download, pushes `netmonx_lan_speed_bits{client,direction}`). "LAN speed tests" row on Clients. Tested end to end in podman. Phone apps can't push; their results stay on the phone.
 - [ ] **DNS filtering integration** (S) [Pi-hole, AdGuard]: optional compose profile with an exporter for
       Pi-hole/AdGuard Home if the user runs one: queries, block %, top clients.
 - [x] **Collector self-metrics** (S): per-command SSH duration histogram, reconnect counter, and output parse
@@ -138,18 +163,18 @@ Effort: S = an evening, M = a weekend, L = bigger.
 
 - [x] **Weekly digest** (M) [UniFi/eero weekly report]: a small script or cron container that renders key stats
       (uptime, outages, speed, new devices) and sends them to ntfy or email.
-      Done: Done: `scripts/digest.py` (stdlib only) queries Prometheus for the last DIGEST_DAYS (uptime, outages, latency p50/p95, loss, median speed vs plan, bufferbloat grade, devices online/new, reboots, failed router logins) and posts Markdown to ntfy (`NTFY_URL`, optional `NTFY_TOKEN`), or prints. `digest` compose profile runs it on `DIGEST_SCHEDULE` (default mon 08:00). New-device names only with `DIGEST_NAMES=true`. Email not done (ntfy can forward to email).
+      Done: `scripts/digest.py` (stdlib only) queries Prometheus for the last DIGEST_DAYS (uptime, outages, latency p50/p95, loss, median speed vs plan, bufferbloat grade, devices online/new, reboots, failed router logins) and posts Markdown to ntfy (`NTFY_URL`, optional `NTFY_TOKEN`), or prints. `digest` compose profile runs it on `DIGEST_SCHEDULE` (default mon 08:00). New-device names only with `DIGEST_NAMES=true`. Email not done (ntfy can forward to email).
 - [x] **Home Assistant / MQTT bridge** (M): publish presence and WAN state over MQTT for automations.
-      Done: Done: `MQTT_URL` (unset ⇒ off) starts a publish-only MQTT 3.1.1 client in the collector (no new dependency; QoS 0, retained, last will on `netmonx/status`). Publishes WAN state and home/not_home per device (devices.yml only by default, `MQTT_DEVICES=all` for all) on change, everything again after a reconnect, plus Home Assistant discovery configs. Tested against Mosquitto 2.0.22; not tried in a real Home Assistant.
+      Done: `MQTT_URL` (unset ⇒ off) starts a publish-only MQTT 3.1.1 client in the collector (no new dependency; QoS 0, retained, last will on `netmonx/status`). Publishes WAN state and home/not_home per device (devices.yml only by default, `MQTT_DEVICES=all` for all) on change, everything again after a reconnect, plus Home Assistant discovery configs. Tested against Mosquitto 2.0.22; not tried in a real Home Assistant.
 - [x] **Kiosk / read-only view** (S): Grafana anonymous Viewer role for a wall display, plus a compact
       "status" dashboard.
       Done: *Status* dashboard (`netmonx-status`, big tiles + firing alerts, 1 min refresh) and `GRAFANA_ANONYMOUS` (default false) for anonymous Viewer access.
 - [x] **Backup/restore script** (S): back up the Grafana and Prometheus volumes and speedtest-tracker's sqlite.
-      Done: Done: `scripts/backup.sh` (stops the project's containers, tars each volume through a throwaway alpine container, optional `--live` and `--with-secrets`) and `scripts/restore.sh` (asks first, recreates missing volumes, never overwrites an existing .env/key). Tested with podman on a throwaway project.
+      Done: `scripts/backup.sh` (stops the project's containers, tars each volume through a throwaway alpine container, optional `--live` and `--with-secrets`) and `scripts/restore.sh` (asks first, recreates missing volumes, never overwrites an existing .env/key). Tested with podman on a throwaway project.
 - [ ] **Long-term downsampling** (M): optional VictoriaMetrics in place of Prometheus, for years of data at low
       disk use.
 - [x] **Setup wizard** (M): `scripts/setup.sh` writes `.env`, makes the key, and fills in IPs from recon output.
-      Done: Done: `scripts/setup.sh` (`--yes` takes defaults): detects TZ, gateway and host IP, generates the Grafana password and Speedtest key, makes the key and shows it, tests the login with `nvram get` only, writes router + mesh IPs from `cfg_device_list` into smokeping's config. Re-runnable; keeps existing values. Tested against the real router in a scratch copy (repo config not changed).
+      Done: `scripts/setup.sh` (`--yes` takes defaults): detects TZ, gateway and host IP, generates the Grafana password and Speedtest key, makes the key and shows it, tests the login with `nvram get` only, writes router + mesh IPs from `cfg_device_list` into smokeping's config. Re-runnable; keeps existing values. Tested against the real router in a scratch copy (repo config not changed).
 - [x] **Repo hygiene** (S): `git init` and a CI workflow running `./dev.sh check`. Publish a multi-arch collector
       image (arm64 for a Pi/NAS). Done: `.github/workflows/`, `scripts/release.sh`.
 - [ ] **Support more models** (M): Asuswrt-Merlin firmware (more `nvram` keys, still no `/jffs` scripts); test
