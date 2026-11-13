@@ -59,6 +59,7 @@ under the new version when you cut a release.
 - `./dev.sh` also starts the optional services in `COMPOSE_PROFILES` (iperf3, digest; netalertx only on Linux).
 
 ### Fixed
+- NetAlertX didn't start under Podman ("unknown mount option uid=20211"); its /tmp now uses only `mode=1777`.
 - Security updates in the collector image: asyncssh 2.23.1 (CVE-2026-54591), cryptography 50.0.0
   (CVE-2026-69247, CVE-2026-69249, bundled OpenSSL) and Debian packages (zlib). `OPENSSL_armcap=0`
   keeps the new OpenSSL from crashing on ARM VMs such as podman on Apple Silicon.

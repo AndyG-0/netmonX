@@ -155,7 +155,8 @@ services:
       TZ: ${TZ:-UTC}
       PORT: "20211"
     tmpfs:
-      - /tmp:uid=20211,gid=20211,mode=1700
+      # A normal /tmp (sticky, world-writable). Podman rejects the uid=/gid= tmpfs options Docker accepts.
+      - /tmp:mode=1777
     volumes:
       - netalertx_data:/data
     # Enabled by COMPOSE_PROFILES=netalertx in .env; remove it there to skip NetAlertX.
