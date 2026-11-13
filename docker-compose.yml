@@ -58,7 +58,7 @@ services:
 
   # DNS lookup time and website reachability.
   blackbox:
-    image: prom/blackbox-exporter:v0.29.0
+    image: prom/blackbox-exporter:v0.29.1
     restart: unless-stopped
     command: ["--config.file=/etc/blackbox/blackbox.yml"]
     volumes:
@@ -66,7 +66,7 @@ services:
 
   # Scheduled speed tests, with its own web UI on :18765.
   speedtest-tracker:
-    image: lscr.io/linuxserver/speedtest-tracker:1.15.0
+    image: lscr.io/linuxserver/speedtest-tracker:1.15.1
     restart: unless-stopped
     ports: ["${SPEEDTEST_PORT:-18765}:80"]
     environment:
@@ -83,7 +83,7 @@ services:
       - speedtest_data:/config
 
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     ports: ["${PROMETHEUS_PORT:-9090}:9090"]
     command:
@@ -96,7 +96,7 @@ services:
       - prometheus_data:/prometheus
 
   grafana:
-    image: grafana/grafana:13.2.4
+    image: grafana/grafana:13.3.0
     restart: unless-stopped
     ports: ["${GRAFANA_PORT:-3000}:3000"]
     environment:
@@ -115,7 +115,7 @@ services:
   # LAN throughput test server (COMPOSE_PROFILES=iperf3). Run a client from a laptop with scripts/lan-speed.sh
   # (results are graphed), or from a phone with any iperf3 app (results stay on the phone).
   iperf3:
-    image: alpine:3.22.8
+    image: alpine:3.24.4
     restart: unless-stopped
     command: ["sh", "-c", "apk add --no-cache iperf3 >/dev/null && exec iperf3 --server --forceflush"]
     ports: ["${IPERF3_PORT:-5201}:5201/tcp", "${IPERF3_PORT:-5201}:5201/udp"]
@@ -123,14 +123,14 @@ services:
 
   # Receives results from scripts/lan-speed.sh for Prometheus. No login: anyone on the LAN can push to it.
   pushgateway:
-    image: prom/pushgateway:v1.9.0
+    image: prom/pushgateway:v1.11.5
     restart: unless-stopped
     ports: ["${PUSHGATEWAY_PORT:-9091}:9091"]
     profiles: ["iperf3"]
 
   # Weekly digest to ntfy (uptime, outages, latency, speed, new devices). Enable with COMPOSE_PROFILES=digest.
   digest:
-    image: python:3.12-alpine3.22
+    image: python:3.14-alpine3.22
     restart: unless-stopped
     command: ["python3", "/app/digest.py", "--schedule", "${DIGEST_SCHEDULE:-mon 08:00}"]
     environment:
@@ -147,7 +147,7 @@ services:
   # Device discovery and new-device alerts, with its own web UI on :20211.
   # Host networking is needed so ARP scans can see the LAN.
   netalertx:
-    image: jokobsk/netalertx:26.10.0
+    image: jokobsk/netalertx:26.10.28
     restart: unless-stopped
     network_mode: host
     cap_add: [NET_RAW, NET_ADMIN, NET_BIND_SERVICE]
