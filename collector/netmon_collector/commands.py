@@ -12,6 +12,7 @@ import ipaddress
 import re
 from dataclasses import dataclass
 
+_MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
 _IFACE_RE = re.compile(r"^[A-Za-z0-9._-]{1,15}$")
 _HOSTNAME_RE = re.compile(
     r"^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$"
@@ -39,6 +40,8 @@ NVRAM_KEYS = (
     "wl2_ifname",
     "wl3_ifname",
     "cfg_device_list",
+    # Name given to this node in the Asus app ("Living Room"); empty on the main router unless set.
+    "cfg_alias",
     "custom_clientlist",
     # DHCP pool, for the "pool almost full" alert.
     "dhcp_start",
@@ -197,6 +200,20 @@ def syslog_tail(lines: int = 500) -> Command:
     """The end of the router's log; the poller counts only lines it hasn't seen yet."""
     lines = max(1, min(int(lines), 2000))
     return Command("syslog", f"tail -n {lines} {SYSLOG_PATH} 2>/dev/null")
+
+
+def node_aliases(macs: list[str]) -> Command:
+    """Names of the AiMesh nodes ("Living Room"), from the main router's copy of each node's settings.
+
+    /tmp/<node MAC>.json also holds Wi-Fi settings, so only the alias is picked out on the router.
+    """
+    for mac in macs:
+        if not _MAC_RE.match(mac):
+            raise ValueError(f"unsafe MAC: {mac!r}")
+    loop = " ".join(m.upper() for m in macs)
+    pick = """grep -o '"cfg_alias": *"[^"]*"'"""
+    body = f"printf '%s ' $m; {pick} /tmp/$m.json 2>/dev/null || echo"
+    return Command("node_aliases", f"for m in {loop}; do {body}; done")
 
 
 def port_status() -> Command:

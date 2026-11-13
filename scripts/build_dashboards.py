@@ -100,10 +100,13 @@ def stat(title, expr, unit="none", legend="", steps=None, mappings=None, decimal
 
 
 def timeseries(title, targets, unit="none", description="", stack=False, min_=None, fill=10,
-               overrides=None, legend_calcs=("mean", "max")):
+               overrides=None, legend_calcs=("mean", "max"), no_value=""):
+    """no_value: text shown instead of "No data", e.g. how to switch the feature on."""
     custom = {"lineWidth": 1, "fillOpacity": fill, "showPoints": "never", "spanNulls": False,
               "stacking": {"mode": "normal" if stack else "none"}}
     defaults = {"unit": unit, "custom": custom}
+    if no_value:
+        defaults["noValue"] = no_value
     if min_ is not None:
         defaults["min"] = min_
     return {
@@ -115,20 +118,26 @@ def timeseries(title, targets, unit="none", description="", stack=False, min_=No
     }
 
 
-def state_timeline(title, targets, description="", up_down=True):
+def state_timeline(title, targets, description="", up_down=True, words=("Down", "Up"), per_page=0):
+    """per_page > 0 pages the rows (with a pager under the panel) instead of squeezing them all in."""
     if up_down:
         defaults = {
             "mappings": [{"type": "value", "options": {
-                "0": {"text": "Down", "color": "red"}, "1": {"text": "Up", "color": "green"}}}],
+                "0": {"text": words[0], "color": "red", "index": 0},
+                "1": {"text": words[1], "color": "green", "index": 1}}}],
             "thresholds": thresholds((None, "red"), (1, "green")),
             "color": {"mode": "thresholds"}}
     else:  # plain values (e.g. channel numbers), one colour per value
         defaults = {"color": {"mode": "continuous-BlPu"}}
+    options = {"showValue": "never" if up_down else "auto", "mergeValues": True, "rowHeight": 0.8,
+               "legend": {"showLegend": True, "displayMode": "list", "placement": "bottom"}}
+    if per_page:
+        options["perPage"] = per_page
     return {
         "type": "state-timeline", "title": title, "description": description, "datasource": DS,
         "targets": targets,
         "fieldConfig": {"defaults": defaults, "overrides": []},
-        "options": {"showValue": "never" if up_down else "auto", "mergeValues": True, "rowHeight": 0.8},
+        "options": options,
     }
 
 
@@ -202,16 +211,16 @@ def prom_annotation(name, expr, color, title, text=""):
 # Shown on every dashboard, so a dip in a chart can be matched to its cause.
 EVENT_ANNOTATIONS = [
     prom_annotation("WAN down", "max by (node) (asus_wan_up) == 0", "red", "WAN down"),
-    prom_annotation("Reboots", "resets(asus_router_uptime_seconds[2m]) > 0", "orange", "{{node}} rebooted"),
+    prom_annotation("Reboots", "resets(asus_router_uptime_seconds[2m]) > 0", "orange", "{{node_name}} rebooted"),
     prom_annotation("WAN IP changes", "increase(asus_wan_ip_changes_total[2m]) > 0", "blue", "WAN IP changed"),
 ]
 
 
-def query_var(name, label, query, multi=False, include_all=False, regex=""):
+def query_var(name, label, query, multi=False, include_all=False, regex="", sort=1):
     v = {
         "name": name, "label": label, "type": "query", "datasource": DS,
         "query": {"query": query, "refId": "v"}, "definition": query, "refresh": 2,
-        "multi": multi, "includeAll": include_all, "sort": 1, "current": {},
+        "multi": multi, "includeAll": include_all, "sort": sort, "current": {},
     }
     if regex:
         v["regex"] = regex
@@ -228,9 +237,8 @@ def relabel(expr, **labels):
 
 def topology():
     """Node Graph of router -> mesh nodes -> devices, from two instant table queries (nodes, edges)."""
-    infra = ("(max by (node, role) (asus_router_info) * on (node) group_left (node_name) "
-             "max by (node, node_name) (asus_client_info)) or max by (node, role) (asus_router_info)")
-    infra = relabel(f"({infra})", id="node", title=("node", "node_name"), subtitle="role")
+    infra = "max by (node, node_name, role) (asus_router_info)"
+    infra = relabel(infra, id="node", title=("node", "node_name"), subtitle="role")
     devices = 'label_replace(max by (mac, hostname, band) (asus_client_info), "subtitle", "wired", "band", "")'
     devices = relabel(f'label_replace({devices}, "subtitle", "$1", "band", "(.+)")', id="mac", title=("mac", "hostname"))
     nodes = f"topk by (id) (1, max by (id, title, subtitle) ({infra} or {devices}))"  # one row per id
@@ -259,8 +267,8 @@ LAN_LOSS = (
     " / sum by (host) (rate(smokeping_requests_total{{{sel}}}[$__rate_interval]))"
 )
 CPU_BUSY = (
-    "1 - sum by (node) (rate(asus_router_cpu_seconds_total{{mode=\"idle\"{sel}}}[$__rate_interval]))"
-    " / sum by (node) (rate(asus_router_cpu_seconds_total{{{sel0}}}[$__rate_interval]))"
+    "1 - sum by (node, node_name) (rate(asus_router_cpu_seconds_total{{mode=\"idle\"{sel}}}[$__rate_interval]))"
+    " / sum by (node, node_name) (rate(asus_router_cpu_seconds_total{{{sel0}}}[$__rate_interval]))"
 )
 
 
@@ -381,7 +389,7 @@ def isp(links) -> dict:
                 [target("asus_traceroute_hop_rtt_ms", ref="A", instant=True, table=True),
                  target("asus_traceroute_hop_loss_ratio", ref="B", instant=True, table=True)],
                 organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
-                                            "node": True},
+                                            "node": True, "node_name": True},
                           "renameByName": {"hop": "Hop", "ip": "Address", "Value #A": "RTT (ms)",
                                            "Value #B": "Loss"}},
                 overrides=[override("Loss", unit="percentunit", decimals=0)],
@@ -392,7 +400,7 @@ def isp(links) -> dict:
                 [target("asus_wan_info", ref="A", instant=True, table=True),
                  target("asus_isp_hop_info", ref="B", instant=True, table=True)],
                 organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
-                                            "Value #A": True, "Value #B": True, "node": True},
+                                            "Value #A": True, "Value #B": True, "node": True, "node_name": True},
                           "renameByName": {"ip": "WAN IP", "gateway": "Gateway", "dns": "ISP DNS",
                                            "proto": "Type", "iface": "Interface", "wan": "WAN",
                                            "wan_type": "Port"}}), 8, 8)
@@ -498,8 +506,8 @@ def router(links) -> dict:
                           target("asus_up", ref="C", instant=True, table=True),
                           target("asus_firmware_update_available", ref="D", instant=True, table=True)],
                 organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True,
-                                            "Value #A": True},
-                          "renameByName": {"node": "Node", "model": "Model", "firmware": "Firmware",
+                                            "Value #A": True, "node": True},
+                          "renameByName": {"node_name": "Node", "model": "Model", "firmware": "Firmware",
                                            "mac": "MAC", "role": "Role", "Value #B": "Uptime",
                                            "Value #C": "Reachable", "latest": "Latest firmware",
                                            "Value #D": "Update"}},
@@ -509,20 +517,20 @@ def router(links) -> dict:
                                                              "1": {"text": "available", "color": "orange"}}}]),
                            override("Reachable", mappings=UP_MAP,
                                     custom_cellOptions={"type": "color-text"})]), 24, 6)
-    L.add(timeseries("CPU busy", [target(CPU_BUSY.format(sel=", " + sel, sel0=sel), "{{node}}")],
+    L.add(timeseries("CPU busy", [target(CPU_BUSY.format(sel=", " + sel, sel0=sel), "{{node_name}}")],
                      "percentunit", min_=0, fill=0), 8, 8)
     L.add(timeseries("Memory used",
                      [target(f"1 - asus_router_memory_available_bytes{{{sel}}} / asus_router_memory_total_bytes{{{sel}}}",
-                             "{{node}}")], "percentunit", min_=0, fill=0), 8, 8)
-    L.add(timeseries("Temperature", [target(f"asus_router_temperature_celsius{{{sel}}}", "{{node}} {{sensor}}")],
+                             "{{node_name}}")], "percentunit", min_=0, fill=0), 8, 8)
+    L.add(timeseries("Temperature", [target(f"asus_router_temperature_celsius{{{sel}}}", "{{node_name}} {{sensor}}")],
                      "celsius", fill=0,
                      description="Radio sensors are raw driver values; some older chips report in a different "
                                  "scale."), 8, 8)
-    L.add(timeseries("Load average (1m)", [target(f"asus_router_load1{{{sel}}}", "{{node}}")], "none",
+    L.add(timeseries("Load average (1m)", [target(f"asus_router_load1{{{sel}}}", "{{node_name}}")], "none",
                      min_=0, fill=0), 8, 8)
     L.add(timeseries("Tracked connections",
-                     [target(f"asus_router_conntrack_entries{{{sel}}}", "{{node}}"),
-                      target(f"asus_router_conntrack_max{{{sel}}}", "{{node}} limit", "B")], "none", min_=0, fill=0),
+                     [target(f"asus_router_conntrack_entries{{{sel}}}", "{{node_name}}"),
+                      target(f"asus_router_conntrack_max{{{sel}}}", "{{node_name}} limit", "B")], "none", min_=0, fill=0),
           8, 8)
     L.add(timeseries("Mesh node ping from LAN",
                      [target(LAN_RTT.format(sel=PRIVATE_HOSTS), "{{host}}")], "ms", min_=0, fill=0,
@@ -530,16 +538,16 @@ def router(links) -> dict:
     L.add(timeseries(
         "Interface traffic",
         [target(f'rate(asus_net_receive_bytes_total{{{sel}, iface=~"$iface"}}[$__rate_interval]) * 8',
-                "{{node}} {{iface}} in"),
+                "{{node_name}} {{iface}} in"),
          target(f'rate(asus_net_transmit_bytes_total{{{sel}, iface=~"$iface"}}[$__rate_interval]) * -8',
-                "{{node}} {{iface}} out", "B")],
+                "{{node_name}} {{iface}} out", "B")],
         "bps", fill=5), 16, 9)
     L.add(timeseries(
         "Errors & drops",
-        [target(f"sum by (node, iface) (rate(asus_net_receive_errors_total{{{sel}}}[$__rate_interval]) + "
-                f"rate(asus_net_transmit_errors_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} errors"),
-         target(f"sum by (node, iface) (rate(asus_net_receive_drops_total{{{sel}}}[$__rate_interval]) + "
-                f"rate(asus_net_transmit_drops_total{{{sel}}}[$__rate_interval])) > 0", "{{node}} {{iface}} drops",
+        [target(f"sum by (node, node_name, iface) (rate(asus_net_receive_errors_total{{{sel}}}[$__rate_interval]) + "
+                f"rate(asus_net_transmit_errors_total{{{sel}}}[$__rate_interval])) > 0", "{{node_name}} {{iface}} errors"),
+         target(f"sum by (node, node_name, iface) (rate(asus_net_receive_drops_total{{{sel}}}[$__rate_interval]) + "
+                f"rate(asus_net_transmit_drops_total{{{sel}}}[$__rate_interval])) > 0", "{{node_name}} {{iface}} drops",
                 "B")],
         "pps", min_=0, fill=0), 8, 9)
     L.add(timeseries(
@@ -562,8 +570,8 @@ def router(links) -> dict:
          rinst(f'100 - asus_wifi_airtime_percent{{{sel}, stat="idle"}}', "D"),
          rinst(f"increase(asus_wifi_channel_changes_total{{{sel}}}[24h])", "E")],
         organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "Value #A": True,
-                                    "stat": True},
-                  "renameByName": {"node": "Node", "iface": "Interface", "radio": "Radio", "band": "Band",
+                                    "stat": True, "node": True},
+                  "renameByName": {"node_name": "Node", "iface": "Interface", "radio": "Radio", "band": "Band",
                                    "chanspec": "Channel", "dfs": "DFS", "Value #B": "Width",
                                    "Value #C": "Noise floor", "Value #D": "Busy", "Value #E": "Channel changes (24h)"}},
         overrides=[override("Width", unit="MHz"), override("Noise floor", unit="dBm"),
@@ -579,20 +587,20 @@ def router(links) -> dict:
         24, 7)
     L.add(timeseries(
         "Airtime busy",
-        [target(f'100 - asus_wifi_airtime_percent{{{sel}, stat="idle"}}', "{{node}} {{iface}}")],
+        [target(f'100 - asus_wifi_airtime_percent{{{sel}, stat="idle"}}', "{{node_name}} {{iface}}")],
         "percent", min_=0, fill=0,
         description="Share of time the channel was not idle: our traffic, other networks and non-Wi-Fi noise."), 8, 8)
     L.add(timeseries(
         "Other networks on the channel",
-        [target(f'asus_wifi_airtime_percent{{{sel}, stat="obss"}}', "{{node}} {{iface}}")],
+        [target(f'asus_wifi_airtime_percent{{{sel}, stat="obss"}}', "{{node_name}} {{iface}}")],
         "percent", min_=0, fill=0,
         description="`obss` airtime: frames from neighbouring networks on the same channel. High values mean "
                     "a less crowded channel would help."), 8, 8)
     L.add(timeseries(
-        "Noise floor", [target(f"asus_wifi_noise_dbm{{{sel}}}", "{{node}} {{iface}}")], "dBm", fill=0,
+        "Noise floor", [target(f"asus_wifi_noise_dbm{{{sel}}}", "{{node_name}} {{iface}}")], "dBm", fill=0,
         description="Lower (more negative) is better. A rise of 5-10 dB points at nearby interference."), 8, 8)
     L.add(state_timeline(
-        "Channel", [target(f"asus_wifi_channel{{{sel}}}", "{{node}} {{iface}}")],
+        "Channel", [target(f"asus_wifi_channel{{{sel}}}", "{{node_name}} {{iface}}")],
         description="Primary channel per radio over time; a change is a DFS move, auto channel or a manual change.",
         up_down=False),
         24, 7)
@@ -620,7 +628,7 @@ def router(links) -> dict:
     L.add(table(
         "Open ports",
         [rinst("asus_port_forward_info", "A"), rinst("asus_upnp_mapping_info", "B")],
-        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "node": True,
+        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "node": True, "node_name": True,
                                     "Value #A": True, "Value #B": True},
                   "renameByName": {"rule": "Port forward", "desc": "UPnP (device says)", "ext_port": "WAN port",
                                    "ip": "LAN device", "int_port": "LAN port", "proto": "Protocol"}},
@@ -631,7 +639,7 @@ def router(links) -> dict:
         "VPN clients",
         [rinst("time() - asus_vpn_client_connected_since_timestamp_seconds", "A"),
          rinst("asus_vpn_client_receive_bytes_total", "B"), rinst("asus_vpn_client_transmit_bytes_total", "C")],
-        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "node": True},
+        organize={"excludeByName": {"Time": True, "__name__": True, "job": True, "instance": True, "node": True, "node_name": True},
                   "renameByName": {"server": "Server", "client": "Client", "real_address": "From",
                                    "virtual_address": "VPN address", "Value #A": "Connected for",
                                    "Value #B": "Received", "Value #C": "Sent"}},
@@ -654,10 +662,10 @@ def router(links) -> dict:
     speed_colors = thresholds((None, "red"), (100, "orange"), (1000, "green"))
     L.add(table(
         "Port link speed",
-        [rinst('max by (node, port) (asus_port_link_speed_mbps{node=~"$node"})', "A"),
-         rinst('max by (node, port) (asus_port_max_speed_mbps{node=~"$node"})', "B")],
-        organize={"excludeByName": {"Time": True},
-                  "renameByName": {"node": "Node", "port": "Port", "Value #A": "Linked at",
+        [rinst('max by (node, node_name, port) (asus_port_link_speed_mbps{node=~"$node"})', "A"),
+         rinst('max by (node, node_name, port) (asus_port_max_speed_mbps{node=~"$node"})', "B")],
+        organize={"excludeByName": {"Time": True, "node": True},
+                  "renameByName": {"node_name": "Node", "port": "Port", "Value #A": "Linked at",
                                    "Value #B": "Port can do"}},
         overrides=[override("Linked at", unit="Mbits", thresholds=speed_colors,
                             mappings=[{"type": "value", "options": {"0": {"text": "no link", "color": "text"}}}],
@@ -670,7 +678,7 @@ def router(links) -> dict:
         10, 10)
     L.add(timeseries(
         "Link speed over time",
-        [target('max by (node, port) (asus_port_link_speed_mbps{node=~"$node"}) > 0', "{{node}} {{port}}")],
+        [target('max by (node, node_name, port) (asus_port_link_speed_mbps{node=~"$node"}) > 0', "{{node_name}} {{port}}")],
         "Mbits", min_=0, fill=0,
         description="Ports with a link. A step down is a link that renegotiated slower (see the alert "
                     "\"Ethernet port linked slower than before\")."),
@@ -711,7 +719,8 @@ def router(links) -> dict:
                 "{{node}} unparsed {{section}}", "C")],
         "none", min_=0, fill=0,
         description="Per hour. One connect per node is normal; more means the connection keeps dropping."), 12, 8)
-    node = query_var("node", "Node", "label_values(asus_up, node)", multi=True, include_all=True)
+    node = query_var("node", "Node", "query_result(max by (node, node_name) (asus_up))", multi=True,
+                     include_all=True, regex='/node="(?<value>[^"]*)",\\s*node_name="(?<text>[^"]*)"/')
     iface = query_var("iface", "Interface", 'label_values(asus_net_receive_bytes_total{node=~"$node"}, iface)',
                       multi=True, include_all=True)
     return dashboard("netmonx-router", "Router & Mesh", L, links, [node, iface])
@@ -769,7 +778,7 @@ def clients(links, netalertx_url) -> dict:
         sort=("Mesh node", False),
         description="Devices behind a mesh node show under that node, not the main router."), 12, 10)
     L.add(table("DHCP leases", [inst("asus_dhcp_lease_info", "A")],
-                organize={"excludeByName": {**hide, "Value": True, "node": True},
+                organize={"excludeByName": {**hide, "Value": True, "node": True, "node_name": True},
                           "renameByName": {"hostname": "Name", "ip": "IP", "mac": "MAC"}},
                 sort=("IP", False)), 12, 10)
 
@@ -804,8 +813,10 @@ def clients(links, netalertx_url) -> dict:
         sort=("Last seen", True),
         description="Every device seen in the retention window, online or not."), 12, 10)
     L.add(state_timeline("Online timeline",
-                         [target('asus_client_online{hostname!=""}', "{{hostname}}")],
-                         description="Named devices only (name them in the Asus app or devices.yml)."), 24, 12)
+                         [target('max by (hostname, mac) (asus_client_online{hostname!=""})', "{{hostname}}")],
+                         words=("Offline", "Online"), per_page=20,
+                         description="Named devices only (name them in the Asus app or devices.yml), 20 per page: "
+                                     "use the pager under the timeline for the rest."), 24, 16)
 
     L.row("Wi-Fi link details (from each node's radios)")
     L.add(table(
@@ -816,8 +827,8 @@ def clients(links, netalertx_url) -> dict:
          inst("asus_wifi_client_score", "G"),
          inst("100 * asus_wifi_client_tx_retries_total / (asus_wifi_client_tx_packets_total "
               "+ asus_wifi_client_tx_retries_total > 0)", "H")],
-        organize={"excludeByName": {**hide, "iface": True},
-                  "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "radio": "Radio",
+        organize={"excludeByName": {**hide, "iface": True, "node": True},
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "node_name": "Node", "radio": "Radio",
                                    "ssid": "SSID", "Value #A": "Signal", "Value #B": "Tx rate",
                                    "Value #C": "Rx rate", "Value #D": "Connected",
                                    "Value #E": "Download (10m avg)", "Value #F": "SNR", "Value #G": "Score",
@@ -834,7 +845,7 @@ def clients(links, netalertx_url) -> dict:
         24, 12)
     L.add(timeseries(
         "Wi-Fi experience by node",
-        [target("avg by (node) (asus_wifi_client_score)", "{{node}}"),
+        [target("avg by (node, node_name) (asus_wifi_client_score)", "{{node_name}}"),
          target("avg(asus_wifi_client_score)", "whole network", "B")],
         "none", min_=0, fill=0, legend_calcs=("mean", "min", "lastNotNull"),
         description=SCORE_HELP), 12, 9)
@@ -842,8 +853,8 @@ def clients(links, netalertx_url) -> dict:
         "Sticky clients (weak signal for an hour, no roam)",
         [inst('max_over_time(asus_wifi_client_rssi_dbm[1h]) < -75 and on(mac) '
               'asus_wifi_client_connected_seconds > 3600', "A")],
-        organize={"excludeByName": {**hide, "iface": True, "radio": True},
-                  "renameByName": {"hostname": "Name", "mac": "MAC", "node": "Node", "ssid": "SSID",
+        organize={"excludeByName": {**hide, "iface": True, "radio": True, "node": True},
+                  "renameByName": {"hostname": "Name", "mac": "MAC", "node_name": "Node", "ssid": "SSID",
                                    "Value": "Best signal (1h)"}},
         overrides=[override("Best signal (1h)", unit="dBm")],
         description="Devices that stayed below -75 dBm for the last hour on the same node. A closer node "
@@ -869,6 +880,7 @@ def clients(links, netalertx_url) -> dict:
         "Ping to each device",
         [target('probe_icmp_duration_seconds{job="lan_clients", phase="rtt"} * 1000', "{{hostname}} {{mac}}")],
         "ms", min_=0, fill=0, legend_calcs=("mean", "max", "lastNotNull"),
+        no_value="Off: set LAN_CLIENT_PING=true in .env and restart the collector",
         description="Empty unless `LAN_CLIENT_PING=true` in .env. One ping a minute from the server to each "
                     "online device on the main LAN. Phones in power-save mode answer late or not at all."), 16, 9)
     L.add(table(
@@ -885,6 +897,7 @@ def clients(links, netalertx_url) -> dict:
         "LAN speed by client",
         [target('max by (client, direction) (netmonx_lan_speed_bits{job="lan_speed"})', "{{client}} {{direction}}")],
         "bps", min_=0, fill=0, legend_calcs=("lastNotNull", "max"),
+        no_value="No tests yet: add iperf3 to COMPOSE_PROFILES, then run scripts/lan-speed.sh <server> from a client",
         description="From `scripts/lan-speed.sh <server> [name]` on a laptop or desktop (COMPOSE_PROFILES=iperf3). "
                     "Each line holds its last result until the next test. Wi-Fi vs. wired, or one room vs. "
                     "another, tells you whether a slow internet complaint is really the Wi-Fi."), 16, 8)
@@ -940,7 +953,7 @@ def device(links) -> dict:
         description="Current entry in the AiMesh client list. Empty while the device is offline."), 16, 4)
     L.add(table(
         "DHCP lease", [inst(f"asus_dhcp_lease_info{{{m}}}", "A")],
-        organize={"excludeByName": {**hide, "node": True, "mac": True},
+        organize={"excludeByName": {**hide, "node": True, "node_name": True, "mac": True},
                   "renameByName": {"hostname": "Lease name", "ip": "IP"}},
         description="Static (manually assigned) addresses have no lease."), 8, 4)
 
@@ -948,8 +961,8 @@ def device(links) -> dict:
     L.add(timeseries(
         "Signal",
         [target(f"asus_client_rssi_dbm{{{m}}}", "client list ({{node_name}})"),
-         target(f"asus_wifi_client_rssi_dbm{{{m}}}", "radio {{node}} {{radio}}", "B"),
-         target(f"asus_wifi_client_snr_db{{{m}}}", "SNR {{node}} {{radio}}", "C")],
+         target(f"asus_wifi_client_rssi_dbm{{{m}}}", "radio {{node_name}} {{radio}}", "B"),
+         target(f"asus_wifi_client_snr_db{{{m}}}", "SNR {{node_name}} {{radio}}", "C")],
         "dBm", fill=0, legend_calcs=("lastNotNull", "min", "mean")), 12, 9)
     L.add(timeseries(
         "Link rate",
@@ -971,7 +984,7 @@ def device(links) -> dict:
         "none", min_=0, fill=0, legend_calcs=("mean", "min", "lastNotNull"), description=SCORE_HELP), 12, 9)
 
     L.row("Where and when")
-    L.add(state_timeline("Online", [target(f"max(asus_client_online{{{m}}})", "online")]), 24, 4)
+    L.add(state_timeline("Online", [target(f"max(asus_client_online{{{m}}})", "online")], words=("Offline", "Online")), 24, 4)
     L.add(state_timeline(
         "Attached to", [target(f"max by (node_name, band) (asus_client_info{{{m}}})", "{{node_name}} {{band}}")],
         description="One row per mesh node and band the device used in the time range. Gaps are offline time, "
@@ -986,11 +999,12 @@ def device(links) -> dict:
         "Ping from the server",
         [target(f'probe_icmp_duration_seconds{{job="lan_clients", phase="rtt", {m}}} * 1000', "rtt")],
         "ms", min_=0, fill=0, legend_calcs=("mean", "max"),
+        no_value="Off: set LAN_CLIENT_PING=true in .env",
         description="Empty unless `LAN_CLIENT_PING=true` in .env (main-LAN devices only)."), 12, 8)
     named = 'max by (hostname, mac) (asus_client_online{hostname!=""})'
-    unnamed = 'label_replace(max by (hostname, mac) (asus_client_online{hostname=""}), "hostname", "$1", "mac", "(.*)")'
+    unnamed = 'label_replace(max by (hostname, mac) (asus_client_online{hostname=""}), "hostname", "unnamed $1", "mac", "(.*)")'
     mac = query_var("mac", "Device", f"query_result({named} or {unnamed})",
-                    regex='/hostname="(?<text>[^"]*)",\\s*mac="(?<value>[^"]*)"/')
+                    regex='/hostname="(?<text>[^"]*)",\\s*mac="(?<value>[^"]*)"/', sort=5)  # A-z, ignoring case
     return dashboard("netmonx-device", "Device", L, links, [mac], time_from="now-7d")
 
 

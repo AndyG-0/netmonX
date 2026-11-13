@@ -137,6 +137,8 @@ class Store:
     def __init__(self) -> None:
         self._groups: dict[tuple[str, str], list[Sample]] = {}
         self._lock = threading.Lock()
+        # node label -> "Office (192.168.50.3)": added as node_name to every series with a node label.
+        self.node_names: dict[str, str] = {}
 
     def set(self, node: str, group: str, samples: list[Sample | None]) -> None:
         clean = [s for s in samples if s is not None]
@@ -158,7 +160,12 @@ class StoreCollector(Collector):
 
     def collect(self):
         by_name: dict[str, list[Sample]] = {}
+        names = self.store.node_names
         for s in self.store.snapshot():
+            labels = dict(s.labels)
+            if "node" in labels and "node_name" not in labels:  # the IP until the first client poll names it
+                name = names.get(labels["node"], labels["node"])
+                s = Sample(s.name, s.value, tuple(sorted({**labels, "node_name": name}.items())))
             by_name.setdefault(s.name, []).append(s)
         for name, samples in sorted(by_name.items()):
             kind, help_text = METRICS[name]

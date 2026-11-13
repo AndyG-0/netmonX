@@ -52,5 +52,14 @@ under the new version when you cut a release.
 ### Changed
 - `asus_wan_up`, `asus_wan_link_up` and `asus_wan_info` have a `wan` label ("0", and "1" with dual WAN). The WAN-down alert fires only when every WAN is down.
 - The `dns` job finds the router's DNS from `ROUTER_HOST` instead of a hard-coded IP.
+- Mesh node names: every series with a `node` label also gets `node_name`, e.g. "Office (192.168.50.147)", from each node's AiMesh location name (`cfg_alias`, read on the main router with `grep`). Dashboards, the Router `$node` picker, alert summaries and the digest show it. Existing series start over once under the new label set.
+- Clients: the Online timeline shows 20 devices per page with a pager instead of squeezing them all in, and reads Online/Offline.
+- Device dashboard opens on a named device (unnamed ones are listed as "unnamed <MAC>").
+- Device ping and LAN speed panels say how to switch them on instead of "No data".
+- `./dev.sh` also starts the optional services in `COMPOSE_PROFILES` (iperf3, digest; netalertx only on Linux).
+
+### Fixed
+- Alert summaries never rendered: the rules used `$$labels`, which this Grafana doesn't unescape, so every summary failed with "bad character U+0024". They use `$labels` now.
+- `./dev.sh`: Prometheus couldn't reach the collector's service discovery URLs, so the DNS, LAN ping and per-device ping jobs had no targets in local development.
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main

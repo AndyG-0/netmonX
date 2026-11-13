@@ -992,7 +992,8 @@
               "job": true,
               "instance": true,
               "Value": true,
-              "node": true
+              "node": true,
+              "node_name": true
             },
             "renameByName": {
               "hostname": "Name",
@@ -1539,7 +1540,7 @@
     {
       "type": "state-timeline",
       "title": "Online timeline",
-      "description": "Named devices only (name them in the Asus app or devices.yml).",
+      "description": "Named devices only (name them in the Asus app or devices.yml), 20 per page: use the pager under the timeline for the rest.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1550,7 +1551,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "asus_client_online{hostname!=\"\"}",
+          "expr": "max by (hostname, mac) (asus_client_online{hostname!=\"\"})",
           "legendFormat": "{{hostname}}",
           "refId": "A"
         }
@@ -1562,12 +1563,14 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "Down",
-                  "color": "red"
+                  "text": "Offline",
+                  "color": "red",
+                  "index": 0
                 },
                 "1": {
-                  "text": "Up",
-                  "color": "green"
+                  "text": "Online",
+                  "color": "green",
+                  "index": 1
                 }
               }
             }
@@ -1594,14 +1597,20 @@
       "options": {
         "showValue": "never",
         "mergeValues": true,
-        "rowHeight": 0.8
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "perPage": 20
       },
       "id": 23,
       "gridPos": {
         "x": 0,
         "y": 62,
         "w": 24,
-        "h": 12
+        "h": 16
       }
     },
     {
@@ -1611,7 +1620,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 74,
+        "y": 78,
         "w": 24,
         "h": 1
       },
@@ -1736,12 +1745,13 @@
               "__name__": true,
               "job": true,
               "instance": true,
-              "iface": true
+              "iface": true,
+              "node": true
             },
             "renameByName": {
               "hostname": "Name",
               "mac": "MAC",
-              "node": "Node",
+              "node_name": "Node",
               "radio": "Radio",
               "ssid": "SSID",
               "Value #A": "Signal",
@@ -1987,7 +1997,7 @@
       "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 75,
+        "y": 79,
         "w": 24,
         "h": 12
       }
@@ -2006,8 +2016,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg by (node) (asus_wifi_client_score)",
-          "legendFormat": "{{node}}",
+          "expr": "avg by (node, node_name) (asus_wifi_client_score)",
+          "legendFormat": "{{node_name}}",
           "refId": "A"
         },
         {
@@ -2054,7 +2064,7 @@
       "id": 26,
       "gridPos": {
         "x": 0,
-        "y": 87,
+        "y": 91,
         "w": 12,
         "h": 9
       }
@@ -2095,12 +2105,13 @@
               "job": true,
               "instance": true,
               "iface": true,
-              "radio": true
+              "radio": true,
+              "node": true
             },
             "renameByName": {
               "hostname": "Name",
               "mac": "MAC",
-              "node": "Node",
+              "node_name": "Node",
               "ssid": "SSID",
               "Value": "Best signal (1h)"
             }
@@ -2136,7 +2147,7 @@
       "id": 27,
       "gridPos": {
         "x": 12,
-        "y": 87,
+        "y": 91,
         "w": 6,
         "h": 9
       }
@@ -2211,7 +2222,7 @@
       "id": 28,
       "gridPos": {
         "x": 18,
-        "y": 87,
+        "y": 91,
         "w": 6,
         "h": 9
       }
@@ -2267,7 +2278,7 @@
       "id": 29,
       "gridPos": {
         "x": 0,
-        "y": 96,
+        "y": 100,
         "w": 12,
         "h": 10
       }
@@ -2324,7 +2335,7 @@
       "id": 30,
       "gridPos": {
         "x": 12,
-        "y": 96,
+        "y": 100,
         "w": 12,
         "h": 10
       }
@@ -2336,7 +2347,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 106,
+        "y": 110,
         "w": 24,
         "h": 1
       },
@@ -2373,6 +2384,7 @@
               "mode": "none"
             }
           },
+          "noValue": "Off: set LAN_CLIENT_PING=true in .env and restart the collector",
           "min": 0
         },
         "overrides": []
@@ -2395,7 +2407,7 @@
       "id": 32,
       "gridPos": {
         "x": 0,
-        "y": 107,
+        "y": 111,
         "w": 16,
         "h": 9
       }
@@ -2473,7 +2485,7 @@
       "id": 33,
       "gridPos": {
         "x": 16,
-        "y": 107,
+        "y": 111,
         "w": 8,
         "h": 9
       }
@@ -2485,7 +2497,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 116,
+        "y": 120,
         "w": 24,
         "h": 1
       },
@@ -2522,6 +2534,7 @@
               "mode": "none"
             }
           },
+          "noValue": "No tests yet: add iperf3 to COMPOSE_PROFILES, then run scripts/lan-speed.sh <server> from a client",
           "min": 0
         },
         "overrides": []
@@ -2543,7 +2556,7 @@
       "id": 35,
       "gridPos": {
         "x": 0,
-        "y": 117,
+        "y": 121,
         "w": 16,
         "h": 8
       }
@@ -2643,7 +2656,7 @@
       "id": 36,
       "gridPos": {
         "x": 16,
-        "y": 117,
+        "y": 121,
         "w": 8,
         "h": 8
       }
@@ -2658,7 +2671,7 @@
       "id": 37,
       "gridPos": {
         "x": 0,
-        "y": 125,
+        "y": 129,
         "w": 24,
         "h": 3
       }
@@ -2709,7 +2722,7 @@
         "iconColor": "orange",
         "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
         "step": "60s",
-        "titleFormat": "{{node}} rebooted",
+        "titleFormat": "{{node_name}} rebooted",
         "textFormat": "",
         "tagKeys": "node",
         "useValueForTime": false,

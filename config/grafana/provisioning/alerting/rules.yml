@@ -15,7 +15,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'min by (node) (asus_up)'
+              expr: 'min by (node, node_name) (asus_up)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -30,7 +30,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "{{ $$labels.node }} has failed polls for 2 minutes (or the collector is down)."
+          summary: "{{ or $labels.node_name $labels.node }} has failed polls for 2 minutes (or the collector is down)."
       - uid: wan-down
         title: WAN down
         condition: C
@@ -134,7 +134,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "{{ $$labels.host }} (router or mesh node) stopped answering pings from the Docker host."
+          summary: "{{ $labels.host }} (router or mesh node) stopped answering pings from the Docker host."
       - uid: speedtest-slow
         title: Speed test under half of normal
         condition: C
@@ -171,7 +171,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'max by (node) (resets(asus_router_uptime_seconds[10m]))'
+              expr: 'max by (node, node_name) (resets(asus_router_uptime_seconds[10m]))'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -186,7 +186,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }} rebooted in the last 10 minutes (its uptime went down)."
+          summary: "{{ or $labels.node_name $labels.node }} rebooted in the last 10 minutes (its uptime went down)."
       - uid: temperature-high
         title: Router temperature above 85 °C
         condition: C
@@ -197,7 +197,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'max by (node, sensor) (asus_router_temperature_celsius)'
+              expr: 'max by (node, node_name, sensor) (asus_router_temperature_celsius)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -212,7 +212,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }} sensor {{ $$labels.sensor }} has been above 85 °C for 10 minutes. Check ventilation (some models report radio temperatures on a different scale)."
+          summary: "{{ or $labels.node_name $labels.node }} sensor {{ $labels.sensor }} has been above 85 °C for 10 minutes. Check ventilation (some models report radio temperatures on a different scale)."
       - uid: conntrack-high
         title: Connection table over 80% full
         condition: C
@@ -223,7 +223,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'max by (node) (asus_router_conntrack_entries / asus_router_conntrack_max)'
+              expr: 'max by (node, node_name) (asus_router_conntrack_entries / asus_router_conntrack_max)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -238,7 +238,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }} is tracking more than 80% of its connection limit. New connections fail when it is full."
+          summary: "{{ or $labels.node_name $labels.node }} is tracking more than 80% of its connection limit. New connections fail when it is full."
       - uid: memory-low
         title: Router memory below 10%
         condition: C
@@ -249,7 +249,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'min by (node) (asus_router_memory_available_bytes / asus_router_memory_total_bytes)'
+              expr: 'min by (node, node_name) (asus_router_memory_available_bytes / asus_router_memory_total_bytes)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -264,7 +264,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }} has had less than 10% of its RAM available for 10 minutes."
+          summary: "{{ or $labels.node_name $labels.node }} has had less than 10% of its RAM available for 10 minutes."
       - uid: wan-ip-changed
         title: WAN IP address changed
         condition: C
@@ -301,7 +301,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'max by (node) (asus_dhcp_leases / asus_dhcp_pool_size)'
+              expr: 'max by (node, node_name) (asus_dhcp_leases / asus_dhcp_pool_size)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -342,7 +342,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "The collector has not finished a {{ $$labels.loop }} poll in over 5 minutes (or Prometheus cannot scrape it)."
+          summary: "The collector has not finished a {{ $labels.loop }} poll in over 5 minutes (or Prometheus cannot scrape it)."
       - uid: new-device
         title: New device on the network
         condition: C
@@ -368,7 +368,7 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: "A device the collector has never seen joined: {{ $$labels.mac }} {{ $$labels.hostname }}."
+          summary: "A device the collector has never seen joined: {{ $labels.mac }} {{ $labels.hostname }}."
       - uid: known-device-offline
         title: Known device offline
         condition: C
@@ -394,7 +394,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.hostname }} ({{ $$labels.mac }}) has been offline longer than its alert_offline_hours in devices.yml."
+          summary: "{{ $labels.hostname }} ({{ $labels.mac }}) has been offline longer than its alert_offline_hours in devices.yml."
       - uid: wan-failover
         title: Primary WAN down, running on the second WAN
         condition: C
@@ -431,7 +431,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'max by (node, latest) (asus_firmware_update_available)'
+              expr: 'max by (node, node_name, latest) (asus_firmware_update_available)'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -446,7 +446,7 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: "{{ $$labels.node }}: the router found newer firmware ({{ $$labels.latest }}). Update it from the Asus app or web UI."
+          summary: "{{ or $labels.node_name $labels.node }}: the router found newer firmware ({{ $labels.latest }}). Update it from the Asus app or web UI."
       - uid: admin-open-to-internet
         title: Router admin open to the internet
         condition: C
@@ -457,7 +457,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'max by (node, setting) (asus_exposure_enabled{setting=~"ssh_wan|webui_wan"})'
+              expr: 'max by (node, node_name, setting) (asus_exposure_enabled{setting=~"ssh_wan|webui_wan"})'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -472,7 +472,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "{{ $$labels.node }}: {{ $$labels.setting }} is on, so the router's admin login can be reached from the internet. Turn it off unless you need it."
+          summary: "{{ or $labels.node_name $labels.node }}: {{ $labels.setting }} is on, so the router's admin login can be reached from the internet. Turn it off unless you need it."
       - uid: port-forwards-changed
         title: Port forwards or UPnP mappings changed
         condition: C
@@ -483,7 +483,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (node) (changes(asus_port_forwards[15m]) + changes(asus_upnp_mappings[15m]))'
+              expr: 'sum by (node, node_name) (changes(asus_port_forwards[15m]) + changes(asus_upnp_mappings[15m]))'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -498,7 +498,7 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: "{{ $$labels.node }}: the number of open ports changed (port forwarding or UPnP). Check the Security & VPN row on the Router dashboard."
+          summary: "{{ or $labels.node_name $labels.node }}: the number of open ports changed (port forwarding or UPnP). Check the Security & VPN row on the Router dashboard."
       - uid: config-changed
         title: Router settings changed
         condition: C
@@ -509,7 +509,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (node) (increase(asus_config_changes_total[15m]))'
+              expr: 'sum by (node, node_name) (increase(asus_config_changes_total[15m]))'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -524,7 +524,7 @@ groups:
         labels:
           severity: info
         annotations:
-          summary: "{{ $$labels.node }}: the router's settings changed. If that wasn't you (or a firmware update), check the web UI."
+          summary: "{{ or $labels.node_name $labels.node }}: the router's settings changed. If that wasn't you (or a firmware update), check the web UI."
       - uid: login-failures
         title: Failed logins to the router
         condition: C
@@ -535,7 +535,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (node) (increase(asus_syslog_events_total{event=~"ssh_login_failed|web_login_failed|vpn_login_failed"}[15m]))'
+              expr: 'sum by (node, node_name) (increase(asus_syslog_events_total{event=~"ssh_login_failed|web_login_failed|vpn_login_failed"}[15m]))'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -550,7 +550,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }}: more than 2 failed SSH, web or VPN logins in 15 minutes. Someone may be guessing the password; see Router events on the Router dashboard."
+          summary: "{{ or $labels.node_name $labels.node }}: more than 2 failed SSH, web or VPN logins in 15 minutes. Someone may be guessing the password; see Router events on the Router dashboard."
       - uid: out-of-memory
         title: Router ran out of memory
         condition: C
@@ -561,7 +561,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'sum by (node) (increase(asus_syslog_events_total{event=~"out_of_memory|crash"}[15m]))'
+              expr: 'sum by (node, node_name) (increase(asus_syslog_events_total{event=~"out_of_memory|crash"}[15m]))'
           - refId: C
             datasourceUid: __expr__
             model:
@@ -576,7 +576,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }}: the router log shows a process killed for lack of memory or a crash. Frequent ones mean the router needs a reboot or a firmware update."
+          summary: "{{ or $labels.node_name $labels.node }}: the router log shows a process killed for lack of memory or a crash. Frequent ones mean the router needs a reboot or a firmware update."
       - uid: uplink-slow
         title: Uplink port below gigabit
         condition: C
@@ -602,7 +602,7 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }}: the WAN/uplink port {{ $$labels.port }} linked at {{ $$value }} Mbit/s although it can do 1000 or more. Usually a bad or old (Cat5, 2-pair) cable or a port on the other end that is set to 100 Mbit/s."
+          summary: "{{ or $labels.node_name $labels.node }}: the WAN/uplink port {{ $labels.port }} linked at {{ $value }} Mbit/s although it can do 1000 or more. Usually a bad or old (Cat5, 2-pair) cable or a port on the other end that is set to 100 Mbit/s."
       - uid: port-speed-dropped
         title: Ethernet port linked slower than before
         condition: C
@@ -628,4 +628,4 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $$labels.node }}: port {{ $$labels.port }} is at {{ $$value }} Mbit/s, slower than earlier today. A cable that renegotiated down often goes bad soon; reseat or replace it."
+          summary: "{{ or $labels.node_name $labels.node }}: port {{ $labels.port }} is at {{ $value }} Mbit/s, slower than earlier today. A cable that renegotiated down often goes bad soon; reseat or replace it."

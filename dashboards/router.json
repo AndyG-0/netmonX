@@ -25,15 +25,16 @@
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(asus_up, node)",
+          "query": "query_result(max by (node, node_name) (asus_up))",
           "refId": "v"
         },
-        "definition": "label_values(asus_up, node)",
+        "definition": "query_result(max by (node, node_name) (asus_up))",
         "refresh": 2,
         "multi": true,
         "includeAll": true,
         "sort": 1,
-        "current": {}
+        "current": {},
+        "regex": "/node=\"(?<value>[^\"]*)\",\\s*node_name=\"(?<text>[^\"]*)\"/"
       },
       {
         "name": "iface",
@@ -154,10 +155,11 @@
               "__name__": true,
               "job": true,
               "instance": true,
-              "Value #A": true
+              "Value #A": true,
+              "node": true
             },
             "renameByName": {
-              "node": "Node",
+              "node_name": "Node",
               "model": "Model",
               "firmware": "Firmware",
               "mac": "MAC",
@@ -282,8 +284,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1 - sum by (node) (rate(asus_router_cpu_seconds_total{mode=\"idle\", node=~\"$node\"}[$__rate_interval])) / sum by (node) (rate(asus_router_cpu_seconds_total{node=~\"$node\"}[$__rate_interval]))",
-          "legendFormat": "{{node}}",
+          "expr": "1 - sum by (node, node_name) (rate(asus_router_cpu_seconds_total{mode=\"idle\", node=~\"$node\"}[$__rate_interval])) / sum by (node, node_name) (rate(asus_router_cpu_seconds_total{node=~\"$node\"}[$__rate_interval]))",
+          "legendFormat": "{{node_name}}",
           "refId": "A"
         }
       ],
@@ -340,7 +342,7 @@
             "uid": "prometheus"
           },
           "expr": "1 - asus_router_memory_available_bytes{node=~\"$node\"} / asus_router_memory_total_bytes{node=~\"$node\"}",
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{node_name}}",
           "refId": "A"
         }
       ],
@@ -397,7 +399,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_router_temperature_celsius{node=~\"$node\"}",
-          "legendFormat": "{{node}} {{sensor}}",
+          "legendFormat": "{{node_name}} {{sensor}}",
           "refId": "A"
         }
       ],
@@ -453,7 +455,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_router_load1{node=~\"$node\"}",
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{node_name}}",
           "refId": "A"
         }
       ],
@@ -510,7 +512,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_router_conntrack_entries{node=~\"$node\"}",
-          "legendFormat": "{{node}}",
+          "legendFormat": "{{node_name}}",
           "refId": "A"
         },
         {
@@ -519,7 +521,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_router_conntrack_max{node=~\"$node\"}",
-          "legendFormat": "{{node}} limit",
+          "legendFormat": "{{node_name}} limit",
           "refId": "B"
         }
       ],
@@ -633,7 +635,7 @@
             "uid": "prometheus"
           },
           "expr": "rate(asus_net_receive_bytes_total{node=~\"$node\", iface=~\"$iface\"}[$__rate_interval]) * 8",
-          "legendFormat": "{{node}} {{iface}} in",
+          "legendFormat": "{{node_name}} {{iface}} in",
           "refId": "A"
         },
         {
@@ -642,7 +644,7 @@
             "uid": "prometheus"
           },
           "expr": "rate(asus_net_transmit_bytes_total{node=~\"$node\", iface=~\"$iface\"}[$__rate_interval]) * -8",
-          "legendFormat": "{{node}} {{iface}} out",
+          "legendFormat": "{{node_name}} {{iface}} out",
           "refId": "B"
         }
       ],
@@ -697,8 +699,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node, iface) (rate(asus_net_receive_errors_total{node=~\"$node\"}[$__rate_interval]) + rate(asus_net_transmit_errors_total{node=~\"$node\"}[$__rate_interval])) > 0",
-          "legendFormat": "{{node}} {{iface}} errors",
+          "expr": "sum by (node, node_name, iface) (rate(asus_net_receive_errors_total{node=~\"$node\"}[$__rate_interval]) + rate(asus_net_transmit_errors_total{node=~\"$node\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{node_name}} {{iface}} errors",
           "refId": "A"
         },
         {
@@ -706,8 +708,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (node, iface) (rate(asus_net_receive_drops_total{node=~\"$node\"}[$__rate_interval]) + rate(asus_net_transmit_drops_total{node=~\"$node\"}[$__rate_interval])) > 0",
-          "legendFormat": "{{node}} {{iface}} drops",
+          "expr": "sum by (node, node_name, iface) (rate(asus_net_receive_drops_total{node=~\"$node\"}[$__rate_interval]) + rate(asus_net_transmit_drops_total{node=~\"$node\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{node_name}} {{iface}} drops",
           "refId": "B"
         }
       ],
@@ -929,10 +931,11 @@
               "job": true,
               "instance": true,
               "Value #A": true,
-              "stat": true
+              "stat": true,
+              "node": true
             },
             "renameByName": {
-              "node": "Node",
+              "node_name": "Node",
               "iface": "Interface",
               "radio": "Radio",
               "band": "Band",
@@ -1094,7 +1097,7 @@
             "uid": "prometheus"
           },
           "expr": "100 - asus_wifi_airtime_percent{node=~\"$node\", stat=\"idle\"}",
-          "legendFormat": "{{node}} {{iface}}",
+          "legendFormat": "{{node_name}} {{iface}}",
           "refId": "A"
         }
       ],
@@ -1151,7 +1154,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_wifi_airtime_percent{node=~\"$node\", stat=\"obss\"}",
-          "legendFormat": "{{node}} {{iface}}",
+          "legendFormat": "{{node_name}} {{iface}}",
           "refId": "A"
         }
       ],
@@ -1208,7 +1211,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_wifi_noise_dbm{node=~\"$node\"}",
-          "legendFormat": "{{node}} {{iface}}",
+          "legendFormat": "{{node_name}} {{iface}}",
           "refId": "A"
         }
       ],
@@ -1264,7 +1267,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_wifi_channel{node=~\"$node\"}",
-          "legendFormat": "{{node}} {{iface}}",
+          "legendFormat": "{{node_name}} {{iface}}",
           "refId": "A"
         }
       ],
@@ -1279,7 +1282,12 @@
       "options": {
         "showValue": "auto",
         "mergeValues": true,
-        "rowHeight": 0.8
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "id": 16,
       "gridPos": {
@@ -1565,6 +1573,7 @@
               "job": true,
               "instance": true,
               "node": true,
+              "node_name": true,
               "Value #A": true,
               "Value #B": true
             },
@@ -1659,7 +1668,8 @@
               "__name__": true,
               "job": true,
               "instance": true,
-              "node": true
+              "node": true,
+              "node_name": true
             },
             "renameByName": {
               "server": "Server",
@@ -1824,7 +1834,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "topk by (id) (1, max by (id, title, subtitle) (label_replace(label_replace(label_replace(label_replace(((max by (node, role) (asus_router_info) * on (node) group_left (node_name) max by (node, node_name) (asus_client_info)) or max by (node, role) (asus_router_info)), \"id\", \"$1\", \"node\", \"(.*)\"), \"title\", \"$1\", \"node\", \"(.*)\"), \"title\", \"$1\", \"node_name\", \"(.+)\"), \"subtitle\", \"$1\", \"role\", \"(.*)\") or label_replace(label_replace(label_replace(label_replace(label_replace(max by (mac, hostname, band) (asus_client_info), \"subtitle\", \"wired\", \"band\", \"\"), \"subtitle\", \"$1\", \"band\", \"(.+)\"), \"id\", \"$1\", \"mac\", \"(.*)\"), \"title\", \"$1\", \"mac\", \"(.*)\"), \"title\", \"$1\", \"hostname\", \"(.+)\")))",
+          "expr": "topk by (id) (1, max by (id, title, subtitle) (label_replace(label_replace(label_replace(label_replace(max by (node, node_name, role) (asus_router_info), \"id\", \"$1\", \"node\", \"(.*)\"), \"title\", \"$1\", \"node\", \"(.*)\"), \"title\", \"$1\", \"node_name\", \"(.+)\"), \"subtitle\", \"$1\", \"role\", \"(.*)\") or label_replace(label_replace(label_replace(label_replace(label_replace(max by (mac, hostname, band) (asus_client_info), \"subtitle\", \"wired\", \"band\", \"\"), \"subtitle\", \"$1\", \"band\", \"(.+)\"), \"id\", \"$1\", \"mac\", \"(.*)\"), \"title\", \"$1\", \"mac\", \"(.*)\"), \"title\", \"$1\", \"hostname\", \"(.+)\")))",
           "legendFormat": "",
           "refId": "nodes",
           "instant": true,
@@ -1896,7 +1906,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (node, port) (asus_port_link_speed_mbps{node=~\"$node\"})",
+          "expr": "max by (node, node_name, port) (asus_port_link_speed_mbps{node=~\"$node\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1908,7 +1918,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (node, port) (asus_port_max_speed_mbps{node=~\"$node\"})",
+          "expr": "max by (node, node_name, port) (asus_port_max_speed_mbps{node=~\"$node\"})",
           "legendFormat": "",
           "refId": "B",
           "instant": true,
@@ -1925,10 +1935,11 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "node": true
             },
             "renameByName": {
-              "node": "Node",
+              "node_name": "Node",
               "port": "Port",
               "Value #A": "Linked at",
               "Value #B": "Port can do"
@@ -2042,8 +2053,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (node, port) (asus_port_link_speed_mbps{node=~\"$node\"}) > 0",
-          "legendFormat": "{{node}} {{port}}",
+          "expr": "max by (node, node_name, port) (asus_port_link_speed_mbps{node=~\"$node\"}) > 0",
+          "legendFormat": "{{node_name}} {{port}}",
           "refId": "A"
         }
       ],
@@ -2467,7 +2478,7 @@
         "iconColor": "orange",
         "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
         "step": "60s",
-        "titleFormat": "{{node}} rebooted",
+        "titleFormat": "{{node_name}} rebooted",
         "textFormat": "",
         "tagKeys": "node",
         "useValueForTime": false,

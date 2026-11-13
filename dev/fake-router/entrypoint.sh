@@ -25,5 +25,7 @@ cat > /tmp/diag_port_status.json <<'JSON'
 {"port_info":{"02:00:00:AA:BB:01":{"W0":{"is_on":"1","max_rate":"2500","link_rate":"2500"},"L1":{"is_on":"1","max_rate":"1000","link_rate":"1000"},"L2":{"is_on":"0","max_rate":"1000","link_rate":"0"}},
  "02:00:00:AA:BB:02":{"W0":{"is_on":"1","max_rate":"2500","link_rate":"1000"},"L1":{"is_on":"1","max_rate":"1000","link_rate":"100"}}}}
 JSON
+# The main router's copy of a node's settings; the collector reads only cfg_alias (the node's name in the app).
+echo '{"wireless":{"wl0_ssid":"HomeNet"},"misc":{"cfg_alias":"Office"}}' > '/tmp/02:00:00:AA:BB:02.json'
 # -s: no password logins, -R: create host keys, -F/-E: foreground, log to stderr
 exec dropbear -F -E -R -s -p 22

@@ -11,6 +11,10 @@ access stays read-only. Grafana loads all 7 dashboards and 24 alert rules withou
 Still open: neighbouring networks, backhaul quality, wired per-client traffic, app usage, DNS filtering,
 VictoriaMetrics and more models (notes on each below).
 
+Follow-up fixes (2026-11-12): mesh node names on every node series and dashboard, paged Online timeline,
+Device dashboard opens on a named device, hints on the opt-in ping/LAN-speed panels, `dev.sh` service discovery
+and profiles. Also fixed: alert summaries had never rendered (`$$labels` isn't unescaped by Grafana 13).
+
 Firmware gotchas (now in the code comments and tests):
 - `sh` on this firmware is a Broadcom memory peek/poke tool, not a shell. `test_commands_are_read_only` blocks it.
 - `ethctl <if> media-type <value>` *sets* the link mode, so the port speeds come from `/tmp/diag_port_status.json`.

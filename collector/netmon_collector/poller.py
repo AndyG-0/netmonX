@@ -420,17 +420,26 @@ def presence_samples(
     return out
 
 
-def node_labels(primary: str, primary_mac: str, mesh: list[parsers.MeshNode], names: dict[str, str]):
-    """(node MAC -> node label, node label -> display name). Names set in the Asus app win if they're unique."""
+def node_labels(
+    primary: str,
+    primary_mac: str,
+    mesh: list[parsers.MeshNode],
+    names: dict[str, str],
+    aliases: dict[str, str] | None = None,
+):
+    """(node MAC -> node label, node label -> display name such as "Office (192.168.50.3)").
+
+    The node's own name from the Asus app (cfg_alias) wins, then a unique name from the app's client list.
+    """
+    aliases = aliases or {}
     nodes = {primary_mac: primary, **{n.mac: n.ip for n in mesh}}
     custom = {label: names.get(mac, "") for mac, label in nodes.items()}
     taken = [v for v in custom.values() if v]
     display = {}
-    for label, name in custom.items():
-        if name and taken.count(name) == 1:
-            display[label] = name
-        else:
-            display[label] = f"main {label}" if label == primary else f"node {label}"
+    for mac, label in nodes.items():
+        name = aliases.get(mac) or (custom[label] if custom[label] and taken.count(custom[label]) == 1 else "")
+        name = name or ("Main router" if label == primary else "Node")
+        display[label] = f"{name} ({label})"
     return nodes, display
 
 
@@ -643,7 +652,9 @@ class NodePoller:
         # devices.yml beats names set in the Asus app, which beat DHCP hostnames.
         self.shared.hostnames = {**self.shared.hostnames, **app_names, **own_names}
         primary_mac = nv.get("lan_hwaddr", "").upper()
-        nodes, display = node_labels(self.node, primary_mac, self.shared.mesh_nodes, app_names)
+        aliases = await self._node_aliases(primary_mac, nv)
+        nodes, display = node_labels(self.node, primary_mac, self.shared.mesh_nodes, app_names, aliases)
+        self.store.node_names = display
         raw_text = await self.conn.run(commands.clients_snapshot())
         raw = parsers.parse_clientlist(raw_text)
         if raw_text.strip() and not raw:
@@ -669,6 +680,14 @@ class NodePoller:
                 tracker.devices[mac].name = names[mac]
         tracker.save()
         self.store.set(self.node, "presence", presence_samples(tracker, meta, now))
+
+    async def _node_aliases(self, primary_mac: str, nv: dict[str, str]) -> dict[str, str]:
+        """MAC -> node name set in the Asus app ("Living Room"); the main router's own is in its nvram."""
+        macs = [n.mac for n in self.shared.mesh_nodes]
+        aliases = parsers.parse_node_aliases(await self.conn.run(commands.node_aliases(macs))) if macs else {}
+        if nv.get("cfg_alias", "").strip() and primary_mac:
+            aliases[primary_mac] = nv["cfg_alias"].strip()
+        return aliases
 
     async def _slow_primary(self, nv: dict[str, str], sec: dict[str, str]) -> list[Sample | None]:
         out: list[Sample | None] = []

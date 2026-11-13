@@ -660,7 +660,7 @@
         "iconColor": "orange",
         "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
         "step": "60s",
-        "titleFormat": "{{node}} rebooted",
+        "titleFormat": "{{node_name}} rebooted",
         "textFormat": "",
         "tagKeys": "node",
         "useValueForTime": false,

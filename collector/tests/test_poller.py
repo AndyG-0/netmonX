@@ -1,6 +1,7 @@
 """Run the poller against a fake connection that replays fixture output."""
 
 import asyncio
+import re
 from pathlib import Path
 
 from prometheus_client import generate_latest
@@ -32,6 +33,7 @@ class FakeConn:
             "traceroute": "traceroute.txt",
             "syslog": "syslog.txt",
             "ports": "port_status.json",
+            "node_aliases": "node_aliases.txt",
         }[command.name]
         return (FIX / name).read_text()
 
@@ -53,10 +55,18 @@ def make(conn, primary=True):
     return poller, store, shared
 
 
-def render(store) -> str:
+def render(store, names: bool = False) -> str:
+    """Exposition text; without the node_name label unless names=True, to keep the assertions short."""
     reg = CollectorRegistry()
     reg.register(StoreCollector(store))
-    return generate_latest(reg).decode()
+    text = generate_latest(reg).decode()
+    if names:
+        return text
+    own = ("asus_clients{", "asus_client_info{")  # these carry node_name themselves
+    return "\n".join(
+        line if line.startswith(own) else re.sub(r',?node_name="[^"]*"(?=[,}])', "", line).replace("{,", "{")
+        for line in text.split("\n")
+    )
 
 
 def test_full_cycle_primary():
@@ -101,13 +111,14 @@ def test_full_cycle_primary():
     assert 'asus_wifi_clients{iface="wl0.1",node="192.168.50.1",radio="wl0",ssid="HomeNet_Guest"} 0.0' in text
     assert 'iface="wl2.5"' not in text  # hidden backhaul with no clients
     # Mesh-wide client list: 6 devices, named nodes, guest SSIDs resolved.
-    assert 'asus_clients{band="",connection="wired",node="192.168.50.2",node_name="Office",ssid=""} 1.0' in text
-    assert (
-        'asus_clients{band="",connection="wired",node="192.168.50.1",node_name="main 192.168.50.1",ssid=""} 1.0' in text
-    )
+    wired = 'asus_clients{band="",connection="wired",'
+    assert wired + 'node="192.168.50.2",node_name="Office (192.168.50.2)",ssid=""} 1.0' in text
+    assert wired + 'node="192.168.50.1",node_name="Main router (192.168.50.1)",ssid=""} 1.0' in text
+    # Every series of a node gets its name, e.g. for dashboard legends.
+    assert 'asus_up{node="192.168.50.1",node_name="Main router (192.168.50.1)"} 1.0' in render(store, names=True)
     assert (
         'asus_clients{band="2.4 GHz",connection="wifi",node="192.168.50.1",'
-        'node_name="main 192.168.50.1",ssid="HomeNet_Guest"} 1.0'
+        'node_name="Main router (192.168.50.1)",ssid="HomeNet_Guest"} 1.0'
     ) in text
     assert text.count("asus_client_info{") == 6
     assert 'hostname="Living room TV"' in text
@@ -128,6 +139,11 @@ def test_full_cycle_primary():
     assert 'asus_port_link_speed_mbps{node="192.168.50.2",port="L2"} 10.0' in text
     assert 'asus_port_max_speed_mbps{node="192.168.50.4",port="W0"} 2500.0' in text
     assert 'port="U1"' not in text  # USB
+    # Node names from the Asus app: on every series with a node label, and on the client counts.
+    text = render(store, names=True)
+    assert 'asus_up{node="192.168.50.1",node_name="Main router (192.168.50.1)"} 1.0' in text
+    assert 'asus_port_up{node="192.168.50.3",node_name="Living \\"Room\\" (192.168.50.3)",port="W0"} 1.0' in text
+    assert 'asus_port_up{node="192.168.50.4",node_name="Node (192.168.50.4)",port="W0"} 1.0' in text
 
 
 def test_mesh_node_skips_wan_and_ping():
@@ -165,9 +181,9 @@ def test_node_labels_fall_back_when_names_repeat():
     nodes, display = node_labels("192.168.50.1", "A", mesh, {"B": "XT8", "C": "XT8"})
     assert nodes == {"A": "192.168.50.1", "B": "192.168.50.2", "C": "192.168.50.3"}
     assert display == {
-        "192.168.50.1": "main 192.168.50.1",
-        "192.168.50.2": "node 192.168.50.2",
-        "192.168.50.3": "node 192.168.50.3",
+        "192.168.50.1": "Main router (192.168.50.1)",
+        "192.168.50.2": "Node (192.168.50.2)",
+        "192.168.50.3": "Node (192.168.50.3)",
     }
 
 

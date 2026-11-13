@@ -780,7 +780,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(1 - sum by (node) (rate(asus_router_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) / sum by (node) (rate(asus_router_cpu_seconds_total{}[$__rate_interval]))) * on(node) group_left group by (node) (asus_router_info{role=\"primary\"})",
+          "expr": "(1 - sum by (node, node_name) (rate(asus_router_cpu_seconds_total{mode=\"idle\"}[$__rate_interval])) / sum by (node, node_name) (rate(asus_router_cpu_seconds_total{}[$__rate_interval]))) * on(node) group_left group by (node) (asus_router_info{role=\"primary\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1072,11 +1072,13 @@
               "options": {
                 "0": {
                   "text": "Down",
-                  "color": "red"
+                  "color": "red",
+                  "index": 0
                 },
                 "1": {
                   "text": "Up",
-                  "color": "green"
+                  "color": "green",
+                  "index": 1
                 }
               }
             }
@@ -1103,7 +1105,12 @@
       "options": {
         "showValue": "never",
         "mergeValues": true,
-        "rowHeight": 0.8
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "id": 17,
       "gridPos": {
@@ -1159,7 +1166,7 @@
         "iconColor": "orange",
         "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
         "step": "60s",
-        "titleFormat": "{{node}} rebooted",
+        "titleFormat": "{{node_name}} rebooted",
         "textFormat": "",
         "tagKeys": "node",
         "useValueForTime": false,

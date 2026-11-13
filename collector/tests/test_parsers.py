@@ -124,6 +124,8 @@ def test_commands_are_read_only():
         commands.security_snapshot().text,
         commands.config_hash().text,
         commands.syslog_tail().text,
+        commands.node_aliases(["04:D9:F5:AA:BB:02"]).text,
+        commands.port_status().text,
         commands.ping("1.1.1.1").text,
         commands.traceroute("1.1.1.1").text,
         commands.ping("2606:4700:4700::1111").text,
@@ -272,3 +274,12 @@ def test_parse_port_status():
     assert parsers.parse_port_status("") == []
     assert parsers.parse_port_status("not json") is None
     assert parsers.parse_port_status('{"node_info": {}}') is None
+
+
+def test_node_aliases():
+    assert parsers.parse_node_aliases((FIX / "node_aliases.txt").read_text()) == {
+        "04:D9:F5:AA:BB:02": "Office",
+        "04:D9:F5:AA:BB:03": 'Living "Room"',
+    }
+    with pytest.raises(ValueError):
+        commands.node_aliases(["04:D9:F5:AA:BB:02; reboot"])

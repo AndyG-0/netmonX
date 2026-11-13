@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Local development: the collector runs on this machine with auto-reload;
-# Prometheus, Grafana, smokeping, blackbox and Speedtest Tracker run in containers.
+# Prometheus, Grafana, smokeping, blackbox and Speedtest Tracker run in containers, plus the optional
+# services named in COMPOSE_PROFILES (iperf3, digest; netalertx on Linux only).
 #
 #   ./dev.sh                 start containers, then run the collector against the real router (.env)
 #   ./dev.sh fake            same, against a fake router container (no hardware needed)
@@ -84,7 +85,8 @@ prometheus_config() {
   local host=host.containers.internal fast=()
   [[ $engine == docker ]] && host=host.docker.internal
   [[ ${FAST:-} == 1 ]] && fast=(-e 's|scrape_interval: 15s|scrape_interval: 5s|' -e 's|evaluation_interval: 15s|evaluation_interval: 5s|')
-  sed -e "s|\"asus-collector:9877\"|\"$host:${LISTEN_PORT:-9877}\"|" ${fast[@]+"${fast[@]}"} \
+  # Every reference, including the http_sd URLs (/sd/dns, /sd/nodes, /sd/clients) behind ping and DNS jobs.
+  sed -e "s|asus-collector:9877|$host:${LISTEN_PORT:-9877}|g" ${fast[@]+"${fast[@]}"} \
     config/prometheus/prometheus.yml > dev/.prometheus.local.yml
 }
 
@@ -99,12 +101,31 @@ containers_up() {  # containers_up [fake]
   free_port GRAFANA_PORT 3000; free_port PROMETHEUS_PORT 9090; free_port SPEEDTEST_PORT 18765
   prometheus_config; local_dashboards
   [[ ${1:-} == fake ]] && { dev_key; svcs+=(fake-router); }
+  profile_services
   info "starting containers: ${svcs[*]}"
   "${compose[@]}" up -d --build "${svcs[@]}" >/dev/null
   sync_grafana_password
   echo "  Grafana     http://localhost:${GRAFANA_PORT:-3000}  (user ${GRAFANA_ADMIN_USER:-admin}, password from GRAFANA_ADMIN_PASSWORD in .env)"
   echo "  Prometheus  http://localhost:${PROMETHEUS_PORT:-9090}/targets"
   echo "  Speedtest   http://localhost:${SPEEDTEST_PORT:-18765}"
+}
+
+# Optional services named in COMPOSE_PROFILES (.env), as `docker compose up` would start them.
+profile_services() {
+  local p profs=()
+  IFS=, read -ra profs <<<"${COMPOSE_PROFILES:-}"
+  for p in ${profs[@]+"${profs[@]}"}; do
+    case $p in
+      iperf3) svcs+=(iperf3 pushgateway) ;;
+      digest) svcs+=(digest) ;;
+      netalertx)
+        # Host networking on macOS means the podman/Docker VM, not your LAN: its ARP scan would find nothing
+        # and its port isn't forwarded to this Mac. It needs a Linux host.
+        if [[ $(uname -s) == Linux ]]; then svcs+=(netalertx)
+        else echo "  (skipping netalertx: it needs host networking on a Linux machine, see README)"; fi ;;
+      *) echo "  (unknown profile in COMPOSE_PROFILES: $p)" ;;
+    esac
+  done
 }
 
 # Grafana only reads GF_SECURITY_ADMIN_PASSWORD on its first start; keep it in step with .env.

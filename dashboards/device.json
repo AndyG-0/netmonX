@@ -25,14 +25,14 @@
           "uid": "prometheus"
         },
         "query": {
-          "query": "query_result(max by (hostname, mac) (asus_client_online{hostname!=\"\"}) or label_replace(max by (hostname, mac) (asus_client_online{hostname=\"\"}), \"hostname\", \"$1\", \"mac\", \"(.*)\"))",
+          "query": "query_result(max by (hostname, mac) (asus_client_online{hostname!=\"\"}) or label_replace(max by (hostname, mac) (asus_client_online{hostname=\"\"}), \"hostname\", \"unnamed $1\", \"mac\", \"(.*)\"))",
           "refId": "v"
         },
-        "definition": "query_result(max by (hostname, mac) (asus_client_online{hostname!=\"\"}) or label_replace(max by (hostname, mac) (asus_client_online{hostname=\"\"}), \"hostname\", \"$1\", \"mac\", \"(.*)\"))",
+        "definition": "query_result(max by (hostname, mac) (asus_client_online{hostname!=\"\"}) or label_replace(max by (hostname, mac) (asus_client_online{hostname=\"\"}), \"hostname\", \"unnamed $1\", \"mac\", \"(.*)\"))",
         "refresh": 2,
         "multi": false,
         "includeAll": false,
-        "sort": 1,
+        "sort": 5,
         "current": {},
         "regex": "/hostname=\"(?<text>[^\"]*)\",\\s*mac=\"(?<value>[^\"]*)\"/"
       }
@@ -551,6 +551,7 @@
               "instance": true,
               "Value": true,
               "node": true,
+              "node_name": true,
               "mac": true
             },
             "renameByName": {
@@ -618,7 +619,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_wifi_client_rssi_dbm{mac=\"$mac\"}",
-          "legendFormat": "radio {{node}} {{radio}}",
+          "legendFormat": "radio {{node_name}} {{radio}}",
           "refId": "B"
         },
         {
@@ -627,7 +628,7 @@
             "uid": "prometheus"
           },
           "expr": "asus_wifi_client_snr_db{mac=\"$mac\"}",
-          "legendFormat": "SNR {{node}} {{radio}}",
+          "legendFormat": "SNR {{node_name}} {{radio}}",
           "refId": "C"
         }
       ],
@@ -908,12 +909,14 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "Down",
-                  "color": "red"
+                  "text": "Offline",
+                  "color": "red",
+                  "index": 0
                 },
                 "1": {
-                  "text": "Up",
-                  "color": "green"
+                  "text": "Online",
+                  "color": "green",
+                  "index": 1
                 }
               }
             }
@@ -940,7 +943,12 @@
       "options": {
         "showValue": "never",
         "mergeValues": true,
-        "rowHeight": 0.8
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "id": 15,
       "gridPos": {
@@ -977,11 +985,13 @@
               "options": {
                 "0": {
                   "text": "Down",
-                  "color": "red"
+                  "color": "red",
+                  "index": 0
                 },
                 "1": {
                   "text": "Up",
-                  "color": "green"
+                  "color": "green",
+                  "index": 1
                 }
               }
             }
@@ -1008,7 +1018,12 @@
       "options": {
         "showValue": "never",
         "mergeValues": true,
-        "rowHeight": 0.8
+        "rowHeight": 0.8,
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        }
       },
       "id": 16,
       "gridPos": {
@@ -1132,6 +1147,7 @@
               "mode": "none"
             }
           },
+          "noValue": "Off: set LAN_CLIENT_PING=true in .env",
           "min": 0
         },
         "overrides": []
@@ -1204,7 +1220,7 @@
         "iconColor": "orange",
         "expr": "resets(asus_router_uptime_seconds[2m]) > 0",
         "step": "60s",
-        "titleFormat": "{{node}} rebooted",
+        "titleFormat": "{{node_name}} rebooted",
         "textFormat": "",
         "tagKeys": "node",
         "useValueForTime": false,

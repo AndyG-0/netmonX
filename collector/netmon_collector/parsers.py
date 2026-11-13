@@ -745,6 +745,22 @@ def parse_config_hash(text: str) -> tuple[str, int | None] | None:
     return m.group(1), int(count.group(1)) if count else None
 
 
+# --- AiMesh node names ------------------------------------------------------
+
+
+def parse_node_aliases(text: str) -> dict[str, str]:
+    """`<MAC> "cfg_alias":"Living Room"` per line -> {MAC: name}; nodes without a name are left out."""
+    out: dict[str, str] = {}
+    for m in re.finditer(r'^([0-9A-Fa-f:]{17}) +"cfg_alias": *"((?:[^"\\]|\\.)*)"', text, re.M):
+        try:
+            name = json.loads(f'"{m.group(2)}"').strip()
+        except ValueError:
+            continue
+        if name:
+            out[m.group(1).upper()] = name
+    return out
+
+
 # --- Ethernet ports ----------------------------------------------------------
 
 

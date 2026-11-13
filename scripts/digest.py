@@ -120,7 +120,7 @@ def collect(query: Query, days: int = 7, names: bool = False) -> list[str]:
 
     reboots = query(f"resets(asus_router_uptime_seconds[{r}]) > 0")
     if reboots:
-        nodes = ", ".join(sorted(d["metric"].get("node", "?") for d in reboots))
+        nodes = ", ".join(sorted(d["metric"].get("node_name") or d["metric"].get("node", "?") for d in reboots))
         lines.append(f"**Reboots:** {nodes}")
     events = {
         d["metric"].get("event"): float(d["value"][1])

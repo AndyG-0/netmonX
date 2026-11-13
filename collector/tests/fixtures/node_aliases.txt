@@ -1,0 +1,3 @@
+04:D9:F5:AA:BB:02 "cfg_alias":"Office"
+04:D9:F5:AA:BB:03 "cfg_alias":"Living \"Room\""
+04:D9:F5:AA:BB:04 
