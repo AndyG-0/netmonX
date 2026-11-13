@@ -4,9 +4,9 @@ version = "0.1.0"
 description = "Read-only SSH collector for stock Asuswrt routers, exposing Prometheus metrics"
 requires-python = ">=3.12"
 dependencies = [
-    "asyncssh==2.21.0",
-    # 47+ crashes ("Illegal instruction") on some ARM VMs; 46.x works everywhere.
-    "cryptography==46.0.7",
+    "asyncssh==2.23.1",
+    # On ARM VMs that misreport CPU features this needs OPENSSL_armcap=0 (set in the Dockerfile).
+    "cryptography==50.0.0",
     "prometheus-client==0.22.1",
     "pyyaml==6.0.2",
 ]

@@ -10,7 +10,9 @@ LABEL org.opencontainers.image.title="netmonx-collector" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
 
-RUN useradd --create-home --uid 10001 collector
+# Debian security fixes released after the base image was built.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 collector
 WORKDIR /app
 COPY pyproject.toml ./
 COPY netmon_collector ./netmon_collector
@@ -18,7 +20,10 @@ RUN pip install --no-cache-dir . \
     # Device history (STATE_DIR). Any uid may write: compose runs the container as the host user.
     && mkdir -p /var/lib/netmonx && chmod 1777 /var/lib/netmonx
 
-ENV COLLECTOR_VERSION=${VERSION}
+# OpenSSL's ARM CPU feature probe crashes ("Illegal instruction") in some ARM VMs, e.g. podman on Apple
+# Silicon. The collector does little crypto, so plain code paths cost nothing noticeable. Ignored on x86.
+ENV COLLECTOR_VERSION=${VERSION} \
+    OPENSSL_armcap=0
 USER collector
 EXPOSE 9877
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \

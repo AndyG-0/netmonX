@@ -220,7 +220,7 @@ skips the question). It never overwrites an existing `.env`, router key or `devi
 - **Vendor names:** random "private" MACs (phones) are always flagged. For maker names, run `scripts/update-oui.sh` once; it downloads Wireshark's `manuf` file to `config/collector/manuf` (not committed).
 - **Service discovery:** the collector serves Prometheus HTTP SD lists next to `/metrics`: `/sd/nodes` (router, mesh nodes, ISP gateway), `/sd/dns` (the router's DNS) and `/sd/clients`. Prometheus pings the first list with blackbox (`lan_icmp` job), so new mesh nodes need no config edits, and the `dns` job follows `ROUTER_HOST`.
 - **Per-device pings** (opt-in): set `LAN_CLIENT_PING=true` and Prometheus pings every online device on the main LAN once a minute (`lan_clients` job, at most `LAN_CLIENT_PING_MAX`, guest networks skipped). Phones in power-save answer slowly or not at all, so treat their numbers as rough.
-- **`cryptography` is pinned to 46.0.7** in the collector. Newer wheels crashed with "Illegal instruction" on some ARM virtual CPUs (podman on Apple Silicon). On x86 Linux you can probably unpin it.
+- **"Illegal instruction" on ARM VMs** (podman on Apple Silicon): OpenSSL in `cryptography` probes ARM CPU features that some virtual CPUs misreport. The image sets `OPENSSL_armcap=0`; set it yourself if you run the collector outside the image on such a VM.
 - The collector keeps one SSH session per node and reconnects on failure. If a poll fails, its values are dropped rather than left stale, and `asus_up` goes to 0.
 
 ## Local development (macOS or Linux)
