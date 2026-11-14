@@ -57,6 +57,7 @@ under the new version when you cut a release.
 - Device dashboard opens on a named device (unnamed ones are listed as "unnamed <MAC>").
 - Device ping and LAN speed panels say how to switch them on instead of "No data".
 - `./dev.sh` also starts the optional services in `COMPOSE_PROFILES` (iperf3, digest; netalertx only on Linux).
+- Speedtest Prometheus job moved to `config/prometheus/speedtest/bridge.yml`, loaded through `scrape_config_files`.
 
 ### Fixed
 - NetAlertX didn't start under Podman ("unknown mount option uid=20211"); its /tmp now uses only `mode=1777`.
@@ -65,5 +66,7 @@ under the new version when you cut a release.
   keeps the new OpenSSL from crashing on ARM VMs such as podman on Apple Silicon.
 - Alert summaries never rendered: the rules used `$$labels`, which this Grafana doesn't unescape, so every summary failed with "bad character U+0024". They use `$labels` now.
 - `./dev.sh`: Prometheus couldn't reach the collector's service discovery URLs, so the DNS, LAN ping and per-device ping jobs had no targets in local development.
+- Presence: a wired device that AiMesh reports under a different node no longer counts as a roam.
+- Rootless podman 4.x: speed test uploads capped by slirp4netns (90–650 Mbps on a 1 Gbps line). New `docker-compose.podman.yml` runs Speedtest Tracker on pasta (940 Mbps).
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main

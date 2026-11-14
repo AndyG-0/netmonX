@@ -32,6 +32,15 @@ def test_band_change_counts_as_roam():
     assert [(r.from_band, r.to_band) for r in roams] == [("2.4 GHz", "5 GHz")]
 
 
+def test_wired_node_change_is_not_a_roam():
+    t = presence.ClientTracker()
+    t.update({A: ("Office", "")}, 1)
+    assert t.update({A: ("main", "")}, 2) == []
+    assert t.devices[A].roams == 0 and t.devices[A].node == "main"
+    # Wired to Wi-Fi is still a real move.
+    assert len(t.update({A: ("main", "5 GHz")}, 3)) == 1
+
+
 def test_retention_forgets_old_devices():
     t = presence.ClientTracker(retention_days=1)
     t.update({A: ("main", "")}, 0)

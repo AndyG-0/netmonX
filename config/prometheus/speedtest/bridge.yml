@@ -1,0 +1,9 @@
+# The default speedtest job (mounted as /etc/prometheus/scrape.d/speedtest.yml). pasta.yml replaces it
+# under docker-compose.podman.yml.
+# Turn on in Speedtest Tracker: Settings → Data Integration → Prometheus.
+scrape_configs:
+  - job_name: speedtest
+    scrape_interval: 60s
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ["speedtest-tracker:80"]

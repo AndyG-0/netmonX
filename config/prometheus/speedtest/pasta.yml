@@ -1,0 +1,10 @@
+# Mounted instead of bridge.yml by docker-compose.podman.yml. There speedtest-tracker runs on pasta (the
+# host's network stack), so it's off the compose network and reached through its published port on the host.
+# Prometheus can't read .env: if you changed SPEEDTEST_PORT, change 18765 here to match.
+# Turn on in Speedtest Tracker: Settings → Data Integration → Prometheus.
+scrape_configs:
+  - job_name: speedtest
+    scrape_interval: 60s
+    metrics_path: /prometheus
+    static_configs:
+      - targets: ["host.containers.internal:18765"]

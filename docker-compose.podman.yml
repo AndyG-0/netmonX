@@ -1,0 +1,20 @@
+# Rootless podman 4.x only. Use it with:
+#   podman-compose -f docker-compose.yml -f docker-compose.podman.yml up -d
+#
+# Rootless podman 4.x sends every container on the compose network through one slirp4netns process, a
+# single-threaded user-space network stack. It caps speed tests (upload worst: 90-650 Mbps on a 1 Gbps line,
+# versus 940 Mbps on the host). This runs speedtest-tracker on pasta instead, which tests at full line rate,
+# and the iperf3 server too (COMPOSE_PROFILES=iperf3), so LAN tests measure the LAN rather than slirp4netns.
+# Podman 5 uses pasta for every rootless network, so you don't need this file there.
+services:
+  speedtest-tracker:
+    network_mode: pasta
+
+  # Only starts with COMPOSE_PROFILES=iperf3. Its ports (5201) still come from docker-compose.yml.
+  iperf3:
+    network_mode: pasta
+
+  # speedtest-tracker is now off the compose network: scrape it through its port on the host.
+  prometheus:
+    volumes:
+      - ./config/prometheus/speedtest/pasta.yml:/etc/prometheus/scrape.d/speedtest.yml:ro

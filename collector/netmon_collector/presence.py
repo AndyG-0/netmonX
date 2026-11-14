@@ -97,7 +97,10 @@ class ClientTracker:
                 self.devices[mac] = Seen(now, now, node, band, new=self.baseline_done)
                 continue
             # A device that was offline and comes back elsewhere hasn't roamed; it reconnected.
-            if mac in self.online and (seen.node, seen.band) != (node, band) and seen.node:
+            # Wired devices ("" band) can't roam: when one moves between nodes, the AiMesh client list
+            # has just changed which node reports it.
+            wired = not seen.band and not band
+            if mac in self.online and (seen.node, seen.band) != (node, band) and seen.node and not wired:
                 roam = Roam(mac, seen.node, node, seen.band, band, now)
                 roams.append(roam)
                 seen.roams += 1
