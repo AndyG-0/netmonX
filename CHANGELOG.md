@@ -65,6 +65,7 @@ under the new version when you cut a release.
   keeps the new OpenSSL from crashing on ARM VMs such as podman on Apple Silicon.
 - Alert summaries never rendered: the rules used `$$labels`, which this Grafana doesn't unescape, so every summary failed with "bad character U+0024". They use `$labels` now.
 - `./dev.sh`: Prometheus couldn't reach the collector's service discovery URLs, so the DNS, LAN ping and per-device ping jobs had no targets in local development.
+- Presence: a wired device that AiMesh reports under a different node no longer counts as a roam.
 - Rootless podman 4.x: speed test uploads capped by slirp4netns (90–650 Mbps on a 1 Gbps line). New `docker-compose.podman.yml` runs Speedtest Tracker on pasta (940 Mbps).
 
 [Unreleased]: https://github.com/AndyG-0/netmonX/commits/main
