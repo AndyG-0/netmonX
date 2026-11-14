@@ -187,7 +187,7 @@ jobs:
         run: |
           mkdir -p dist
           tar -czf "dist/netmonx-$VERSION.tar.gz" --transform "s,^,netmonx-$VERSION/," \
-            docker-compose.yml .env.example config dashboards secrets/README.md README.md CHANGELOG.md LICENSE
+            docker-compose.yml docker-compose.podman.yml .env.example config dashboards secrets/README.md README.md CHANGELOG.md LICENSE
           (cd dist && sha256sum "netmonx-$VERSION.tar.gz" > "netmonx-$VERSION.tar.gz.sha256")
           tar -tzf "dist/netmonx-$VERSION.tar.gz"
       - name: Release notes

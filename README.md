@@ -104,6 +104,13 @@ docker compose up -d
 
 The collector image comes from `ghcr.io/andyg-0/netmonx-collector` (amd64 and arm64). Nothing is built on the server.
 
+**Rootless podman 4.x:** start it with `podman-compose -f docker-compose.yml -f docker-compose.podman.yml up -d`
+instead. Podman 4 sends every container's traffic through one `slirp4netns` process, a single-threaded network stack
+that caps speed tests: on a 1 Gbps line, upload came out at 90–650 Mbps instead of 940. The override runs
+Speedtest Tracker on `pasta`, which tests at full speed, and Prometheus scrapes it through port 18765 on the host.
+If you changed `SPEEDTEST_PORT`, change it in `config/prometheus/speedtest/pasta.yml` too. Podman 5 and Docker
+don't need the override.
+
 - Grafana: `http://<host>:3000`. The *Overview* dashboard is the home page. *ISP*, *Router & mesh* and *Clients* are in the netmonX folder. *Device* shows one device (signal, link rate, traffic, where it was attached, DHCP lease); click a MAC on *Clients* to open it. *ISP report card* is a printable summary for any time range (uptime, outages, p95 latency, loss, median speed vs. `ISP_PLAN_DOWN`/`ISP_PLAN_UP`), handy as evidence when you call your ISP. *Status* is a compact page for a wall display: open `http://<host>:3000/d/netmonx-status?kiosk`. To show it without logging in, set `GRAFANA_ANONYMOUS=true` in `.env` (anyone who can reach Grafana can then view, not edit).
 - Prometheus targets: `http://<host>:9090/targets`. Every target should be UP. Speedtest stays down until you do step 5.
 
@@ -174,7 +181,8 @@ Prometheus Pushgateway (port 9091). From a laptop or desktop with `iperf3` insta
 pushes them to the *LAN speed tests* row of the *Clients* dashboard. Phones can use any iperf3 app against the same
 host and port, but those results stay on the phone. Test once on Wi-Fi and once wired, or in different rooms, to
 see whether a slow connection is the Wi-Fi or the ISP. The Pushgateway has no login, so anyone on the LAN can push
-numbers to it.
+numbers to it. On rootless podman 4.x, start it with the podman override (as for the rest of the stack) so iperf3
+runs on pasta and slirp4netns doesn't cap the results.
 
 ### 9. Home Assistant / MQTT (optional)
 
@@ -294,5 +302,6 @@ scripts/              release.sh, changelog.sh, router-recon.sh, build_dashboard
 .github/              CI, publish and release workflows, Dependabot
 dev.sh                local dev runner (collector on host, rest in containers)
 dev/                  fake router + dev overrides
+docker-compose.podman.yml  rootless podman 4.x override (Speedtest Tracker, iperf3 on pasta)
 secrets/              router_key (git-ignored)
 ```

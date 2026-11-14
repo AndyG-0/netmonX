@@ -93,6 +93,7 @@ services:
     volumes:
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./config/prometheus/rules:/etc/prometheus/rules:ro
+      - ./config/prometheus/speedtest/bridge.yml:/etc/prometheus/scrape.d/speedtest.yml:ro
       - prometheus_data:/prometheus
 
   grafana:
